@@ -17,6 +17,8 @@ This file tracks the gap between the current C++ reconstruction and the requeste
 | Clear bonus constants/rank labels | `FUN_00427f22` | `src/reconstruction/original-engine/ClearBonusSystem.*` |
 | Cherry/Border notification labels | `FUN_00427f22` | `src/reconstruction/original-engine/CherrySystem.*`, `BorderSystem.*` |
 | Modern project shell | local CMake/SDL3/Vulkan scaffold | `src/app/`, `src/game/` |
+| Full decompiler corpus | `reference/ghidra/decomp/summary.txt`: 1574/1574 functions | `npm run ghidra-decomp` |
+| Portable resource manifest | Ghidra string addresses and TH07 route tables | `src/game/Th07ResourceManifest.*` |
 
 ## Not Yet 100% Synchronized
 

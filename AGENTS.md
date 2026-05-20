@@ -82,6 +82,7 @@ Use the strongest practical subset available:
 - `npm run audit-resources`
 - `npm run audit-diff`
 - `npm run ghidra-anchors` when replacing behavior from static decompilation anchors
+- `npm run ghidra-decomp` when refreshing the local full decompiler corpus
 
 For documentation-only changes, minimal validation is acceptable.
 

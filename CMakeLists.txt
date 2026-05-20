@@ -12,6 +12,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 add_library(th07_game
     src/game/ReferencePaths.cpp
     src/game/Th07Constants.cpp
+    src/game/Th07ResourceManifest.cpp
 )
 
 target_include_directories(th07_game

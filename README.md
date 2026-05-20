@@ -78,6 +78,7 @@ npm run audit-resources
 npm run audit-diff
 npm run ghidra-export
 npm run ghidra-anchors
+npm run ghidra-decomp
 ```
 
 Resource extraction expects `/home/mystia/下载/thtk-bin-12.zip`, `wine`, and `ffmpeg` when generating optional audio/image references:

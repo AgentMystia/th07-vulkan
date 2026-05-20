@@ -6,6 +6,7 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const recon = join(root, 'src/reconstruction');
 const src = join(recon, 'original-engine');
 const stringsPath = join(root, 'reference/ghidra/strings.tsv');
+const decompManifestPath = join(root, 'reference/ghidra/decomp/manifest.tsv');
 
 const requiredFiles = [
   'GameManager.hpp',
@@ -134,6 +135,12 @@ for (const value of [
   mustContain(ghidraStrings, value, `Ghidra string export missing ${value}`);
 }
 
+if (existsSync(decompManifestPath)) {
+  const lines = readFileSync(decompManifestPath, 'utf8').trim().split(/\r?\n/);
+  mustContain(lines[0] || '', 'entry\tname\tbody_size\tstatus\tfile', 'Full decompilation manifest header is invalid');
+  if (lines.length < 1500) problems.push(`Full decompilation manifest is unexpectedly short: ${lines.length} lines`);
+}
+
 if (problems.length) {
   console.error(problems.join('\n'));
   process.exit(1);
@@ -146,6 +153,7 @@ console.log(JSON.stringify({
   msgFiles: 8,
   shtFiles: 12,
   catkCaptures: 141,
+  fullDecompFunctions: existsSync(decompManifestPath) ? readFileSync(decompManifestPath, 'utf8').trim().split(/\r?\n/).length - 1 : 'not-exported',
 }, null, 2));
 
 function read(file) {

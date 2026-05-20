@@ -13,6 +13,8 @@ Current evidence roots:
   `35467eaf8dc7fc85f024f16fb2037255f151cefda33cf4867bc9122aaa2e80ca`
 - targeted Ghidra anchor export:
   `reference/ghidra/anchors/anchor-xrefs.tsv`
+- full decompiler export:
+  `reference/ghidra/decomp/manifest.tsv` and `reference/ghidra/decomp/functions/`
 
 ## Applied TH07 Deltas
 
@@ -35,7 +37,7 @@ Current evidence roots:
 
 ## Next C++ Passes
 
-1. Export/decompile callers around SHT loading and player callback tables.
+1. Run `npm run ghidra-decomp`, then use `reference/ghidra/decomp/manifest.tsv` as the local function queue.
 2. Replace `Player`, `BombData`, and shot callbacks with TH07 `.sht` driven behavior.
 3. Map TH07 `GameManager`, `ResultScreen`, and score-file structures.
 4. Audit ECL opcode differences against `reference/ecl/ecldata*.decl`.

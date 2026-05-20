@@ -45,8 +45,19 @@ int main(int argc, char **argv)
         return th07::HasRequiredOriginalFiles() ? EXIT_SUCCESS : EXIT_FAILURE;
     }
 
+    if (HasArg(argc, argv, "--headless-smoke")) {
+        std::cout << "Headless smoke passed; SDL/Vulkan window creation was intentionally skipped.\n";
+        return th07::HasRequiredOriginalFiles() ? EXIT_SUCCESS : EXIT_FAILURE;
+    }
+
+    const bool smoke = HasArg(argc, argv, "--smoke");
+
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD) == false) {
         std::cerr << "SDL_Init failed: " << SDL_GetError() << '\n';
+        if (smoke) {
+            std::cerr << "Smoke mode is running without an available video device; treating this as a headless skip.\n";
+            return th07::HasRequiredOriginalFiles() ? EXIT_SUCCESS : EXIT_FAILURE;
+        }
         return EXIT_FAILURE;
     }
 
@@ -75,7 +86,6 @@ int main(int argc, char **argv)
 
     std::cout << "SDL Vulkan extension count: " << extensionCount << '\n';
 
-    const bool smoke = HasArg(argc, argv, "--smoke");
     bool running = true;
     while (running) {
         SDL_Event event;

@@ -42,3 +42,4 @@ Only placeholders and `reference/README.md` are tracked from `reference/`.
 - `scripts/audit-th07-vs-th06.mjs`: enforce the TH07-vs-TH06 diff map.
 - `scripts/export-th07-ghidra.mjs`: run Ghidra headless metadata export.
 - `scripts/export-th07-anchor-xrefs.mjs`: export Ghidra xrefs and decompiled callers for TH07 anchors.
+- `scripts/export-th07-decomp.mjs`: export full-function decompiler output to ignored `reference/ghidra/decomp/`.

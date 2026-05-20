@@ -17,5 +17,6 @@
 | `CherrySystem` | `src/reconstruction/original-engine/CherrySystem.*` | none | New: HUD/constant anchors added |
 | `BorderSystem` | `src/reconstruction/original-engine/BorderSystem.*` | none | New: HUD/penalty/rank anchors added |
 | `Th07Constants` | `src/game/Th07Constants.*` | none | Portable source-derived constants |
+| `Th07ResourceManifest` | `src/game/Th07ResourceManifest.*` | `Th07ResourceManifest.*`, `ShtManager.*` | Portable Ghidra-anchored resource routes |
 | `ReferencePaths` | `src/game/ReferencePaths.*` | none | Modern local reference locator |
 | `SDL3/Vulkan app` | `src/app/main.cpp` | none | Modern platform shell |
