@@ -1,0 +1,13 @@
+subsystem,status,evidence,notes
+RNG,Pending,reference/ghidra,Replace TH06 behavior only after TH07 function mapping.
+Timer,Pending,reference/ghidra,Verify frame-step and pause interactions.
+FileSystem,Pending,reference/original/th07.dat,Modern loader must preserve original archive lookup behavior.
+ANM,Changed,reference/extracted/*.anm,Parser family shared with TH06; TH07 resource slots differ.
+STD,Same,reference/std,Verify all stage1-8 dumps.
+MSG,Same,reference/msg,Verify TH07 msg06-compatible parser behavior.
+ECL,Changed,reference/ecl,Opcode table requires TH07 audit.
+SHT,New,reference/extracted/*.sht,TH07 uses 12 shot-data files for focused/unfocused variants.
+Player,Changed,reference/ghidra,Add Sakuya and TH07 shot/bomb behavior.
+CherryBorder,New,reference/ghidra,Implement Cherry Cherry+ and Supernatural Border.
+Render,Modernized,src/app,SDL3/Vulkan backend must preserve gameplay timing.
+Audio,Modernized,src/app,miniaudio-compatible backend planned.
