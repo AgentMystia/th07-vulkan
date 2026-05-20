@@ -10,12 +10,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y cmake g++ pkg-config libsdl3-dev
+        run: sudo apt-get update && sudo apt-get install -y cmake g++
       - name: Check scripts
         run: npm run check
       - name: Configure
-        run: cmake --preset linux-debug
+        run: cmake --preset linux-ci
       - name: Build
-        run: cmake --build --preset linux-debug
+        run: cmake --build --preset linux-ci
       - name: Test
-        run: ctest --preset linux-debug
+        run: ctest --preset linux-ci

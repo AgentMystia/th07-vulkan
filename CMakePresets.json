@@ -11,18 +11,40 @@
         "TH07_BUILD_APP": "ON",
         "TH07_BUILD_TESTS": "ON"
       }
+    },
+    {
+      "name": "linux-ci",
+      "displayName": "Linux CI Core",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build/linux-ci",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "TH07_BUILD_APP": "OFF",
+        "TH07_BUILD_TESTS": "ON"
+      }
     }
   ],
   "buildPresets": [
     {
       "name": "linux-debug",
       "configurePreset": "linux-debug"
+    },
+    {
+      "name": "linux-ci",
+      "configurePreset": "linux-ci"
     }
   ],
   "testPresets": [
     {
       "name": "linux-debug",
       "configurePreset": "linux-debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "linux-ci",
+      "configurePreset": "linux-ci",
       "output": {
         "outputOnFailure": true
       }
