@@ -1,6 +1,6 @@
-#include "game/ReferencePaths.hpp"
-#include "game/Th07Constants.hpp"
-#include "game/Th07ResourceManifest.hpp"
+#include "ReferencePaths.hpp"
+#include "Th07Constants.hpp"
+#include "Th07ResourceManifest.hpp"
 
 #include <cassert>
 #include <filesystem>
@@ -32,8 +32,8 @@ int main()
     assert(th07::FindStageResources(4)->backgroundAnm == "data/stg4bg.anm");
     assert(th07::FindStageResources(8)->ecl.archivePath == "data/ecldata8.ecl");
     assert(th07::FindStageResources(9) == nullptr);
-    assert(th07::FindShtFile(th07::ShotType::SakuyaB, false)->file.archivePath == "data/ply02b.sht");
-    assert(th07::FindShtFile(th07::ShotType::SakuyaB, true)->file.archivePath == "data/ply02bs.sht");
+    assert(th07::FindShtFile(th07::Th07ShotType::SakuyaB, false)->file.archivePath == "data/ply02b.sht");
+    assert(th07::FindShtFile(th07::Th07ShotType::SakuyaB, true)->file.archivePath == "data/ply02bs.sht");
     assert(th07::IsPointOfCollectionAvailable(128, false));
     assert(th07::IsPointOfCollectionAvailable(0, true));
     assert(!th07::IsPointOfCollectionAvailable(127, false));

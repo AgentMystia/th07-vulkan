@@ -10,9 +10,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_library(th07_game
-    src/game/ReferencePaths.cpp
-    src/game/Th07Constants.cpp
-    src/game/Th07ResourceManifest.cpp
+    src/PlayerBombTables.cpp
+    src/ReferencePaths.cpp
+    src/ShtFile.cpp
+    src/Th07EffectTables.cpp
+    src/Th07Constants.cpp
+    src/Th07ResourceManifest.cpp
 )
 
 target_include_directories(th07_game
@@ -27,7 +30,7 @@ if(TH07_BUILD_APP)
     pkg_check_modules(SDL3 REQUIRED IMPORTED_TARGET sdl3)
 
     add_executable(th07-vulkan
-        src/app/main.cpp
+        src/Th07App.cpp
     )
 
     target_link_libraries(th07-vulkan
@@ -48,4 +51,20 @@ if(TH07_BUILD_TESTS)
     target_link_libraries(th07-tests PRIVATE th07_game)
 
     add_test(NAME th07-reference-paths COMMAND th07-tests)
+
+    add_executable(th07-sht-tests
+        tests/test_sht_parser.cpp
+    )
+
+    target_link_libraries(th07-sht-tests PRIVATE th07_game)
+
+    add_test(NAME th07-sht-parser COMMAND th07-sht-tests)
+
+    add_executable(th07-player-layout-tests
+        tests/test_player_layout.cpp
+    )
+
+    target_link_libraries(th07-player-layout-tests PRIVATE th07_game)
+
+    add_test(NAME th07-player-layout COMMAND th07-player-layout-tests)
 endif()

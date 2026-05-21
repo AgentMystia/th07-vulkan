@@ -160,6 +160,9 @@ struct AnmManager
     ZunResult DrawFacingCamera(AnmVm *vm);
     ZunResult Draw2(AnmVm *vm);
     ZunResult Draw3(AnmVm *vm);
+    ZunResult DrawTh07ScreenQuad(void *th07Vm);
+    ZunResult DrawTh07CameraProjected(void *th07Vm);
+    ZunResult DrawTh07TransformedCameraProjected(void *th07Vm);
 
     void LoadSprite(u32 spriteIdx, AnmLoadedSprite *sprite);
     ZunResult SetActiveSprite(AnmVm *vm, u32 spriteIdx);
@@ -228,4 +231,9 @@ ZUN_ASSERT_SIZE(AnmManager, 0x2112c);
 
 DIFFABLE_EXTERN(AnmManager *, g_AnmManager);
 DIFFABLE_EXTERN(D3DFORMAT, g_TextureFormatD3D8Mapping[6]);
+
+void SetTh07AnmManagerDrawOffset(f32 x, f32 y);
+void ResetTh07AnmManagerDrawOffset();
+void SetTh07AnmManagerColorMultiplier(ZunColor color);
+void ResetTh07AnmManagerColorMultiplier();
 }; // namespace th07

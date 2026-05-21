@@ -4,6 +4,7 @@
 #include "GameWindow.hpp"
 #include "Rng.hpp"
 #include "Supervisor.hpp"
+#include "Th07EffectTables.hpp"
 
 namespace th07
 {
@@ -213,62 +214,56 @@ ChainCallbackResult ScreenEffect::DrawFadeOut(ScreenEffect *effect)
 ChainCallbackResult ScreenEffect::ShakeScreen(ScreenEffect *effect)
 {
     f32 screenOffset;
+    f32 drawOffsetX;
+    f32 drawOffsetY;
 
     if (g_GameManager.isTimeStopped)
     {
-        g_GameManager.arcadeRegionTopLeftPos.x = 32.0f;
-        g_GameManager.arcadeRegionTopLeftPos.y = 16.0f;
-        g_GameManager.arcadeRegionSize.x = 384.0f;
-        g_GameManager.arcadeRegionSize.y = 448.0f;
         return CHAIN_CALLBACK_RESULT_CONTINUE;
+    }
+    if (g_GameManager.gameFrames < kTh07ScreenShakeRequiredGameFrameCount)
+    {
+        return CHAIN_CALLBACK_RESULT_CONTINUE_AND_REMOVE_JOB;
     }
 
     effect->timer.Tick();
     if (effect->timer >= effect->effectLength)
     {
-        g_GameManager.arcadeRegionTopLeftPos.x = 32.0f;
-        g_GameManager.arcadeRegionTopLeftPos.y = 16.0f;
-        g_GameManager.arcadeRegionSize.x = 384.0f;
-        g_GameManager.arcadeRegionSize.y = 448.0f;
+        ResetTh07AnmManagerDrawOffset();
         return CHAIN_CALLBACK_RESULT_CONTINUE_AND_REMOVE_JOB;
     }
 
     screenOffset =
         ((effect->timer.AsFramesFloat() * (effect->shakinessParam - effect->genericParam)) / effect->effectLength) +
         effect->genericParam;
+    drawOffsetX = 0.0f;
+    drawOffsetY = 0.0f;
 
     switch (g_Rng.GetRandomU32InRange(3))
     {
     case 0:
-        g_GameManager.arcadeRegionTopLeftPos.x = 32.0f;
-        g_GameManager.arcadeRegionSize.x = 384.0f;
         break;
     case 1:
-        g_GameManager.arcadeRegionTopLeftPos.x = 32.0f + screenOffset;
-        g_GameManager.arcadeRegionSize.x = 384.0f - screenOffset;
+        drawOffsetX = screenOffset;
         break;
     case 2:
-        g_GameManager.arcadeRegionTopLeftPos.x = 32.0f;
-        g_GameManager.arcadeRegionSize.x = 384.0f - screenOffset;
+        drawOffsetX = -screenOffset;
         break;
     }
 
     switch (g_Rng.GetRandomU32InRange(3))
     {
     case 0:
-        g_GameManager.arcadeRegionTopLeftPos.y = 16.0f;
-        g_GameManager.arcadeRegionSize.y = 448.0f;
         break;
     case 1:
-        g_GameManager.arcadeRegionTopLeftPos.y = 16.0f + screenOffset;
-        g_GameManager.arcadeRegionSize.y = 448.0f - screenOffset;
+        drawOffsetY = screenOffset;
         break;
     case 2:
-        g_GameManager.arcadeRegionTopLeftPos.y = 16.0f;
-        g_GameManager.arcadeRegionSize.y = 448.0f - screenOffset;
+        drawOffsetY = -screenOffset;
         break;
     }
 
+    SetTh07AnmManagerDrawOffset(drawOffsetX, drawOffsetY);
     return CHAIN_CALLBACK_RESULT_CONTINUE;
 }
 

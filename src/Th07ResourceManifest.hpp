@@ -22,7 +22,7 @@ struct StageResourceSet {
 };
 
 struct ShtFileBinding {
-    ShotType shotType;
+    Th07ShotType shotType;
     bool focused;
     ResourceStringAnchor file;
 };
@@ -33,7 +33,12 @@ extern const std::array<ResourceStringAnchor, 8> kTh07MsgFiles;
 extern const std::array<StageResourceSet, 8> kTh07StageResources;
 extern const std::array<ShtFileBinding, 12> kTh07ShtFiles;
 
+constexpr std::string_view kTh07VersionString = "` Perfect Cherry Blossom. ver 1.00b";
+constexpr std::string_view kTh07VersionStringAddress = "00497ba9";
+constexpr std::string_view kTh07BgmFmtPath = "bgm/thbgm.fmt";
+constexpr std::string_view kTh07BgmDatPath = "./thbgm.dat";
+
 const StageResourceSet* FindStageResources(int stageNumber);
-const ShtFileBinding* FindShtFile(ShotType shotType, bool focused);
+const ShtFileBinding* FindShtFile(Th07ShotType shotType, bool focused);
 
 } // namespace th07

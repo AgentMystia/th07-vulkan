@@ -1,21 +1,20 @@
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const th06Src = '/home/mystia/项目/TouhouWeb/reference/th06-master/src';
-const targetRoot = join(root, 'src/reconstruction');
-const targetSrc = join(targetRoot, 'original-engine');
+const targetRoot = join(root, 'src');
+const targetSrc = targetRoot;
 const ghidraStrings = join(root, 'reference/ghidra/strings.tsv');
 
 if (!existsSync(th06Src)) throw new Error(`TH06 source tree not found: ${th06Src}`);
 if (!existsSync(ghidraStrings)) throw new Error(`Run npm run ghidra-export first: ${ghidraStrings}`);
-if (existsSync(targetSrc) && !process.argv.includes('--force')) {
-  throw new Error(`Refusing to overwrite ${targetSrc}. Re-run with --force only when intentionally re-importing the TH06 baseline.`);
+if (existsSync(join(targetSrc, 'GameManager.cpp')) && !process.argv.includes('--force')) {
+  throw new Error(`Refusing to overwrite the flat ${targetSrc} source tree. Re-run with --force only when intentionally re-importing the TH06 baseline.`);
 }
 
 mkdirSync(targetRoot, { recursive: true });
-if (process.argv.includes('--force')) rmSync(targetSrc, { recursive: true, force: true });
 cpSync(th06Src, targetSrc, { recursive: true, force: true });
 
 renameIfExists(join(targetSrc, 'th06.hpp'), join(targetSrc, 'th07.hpp'));

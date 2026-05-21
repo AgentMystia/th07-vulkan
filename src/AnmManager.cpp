@@ -2,12 +2,17 @@
 #include "FileSystem.hpp"
 #include "GameErrorContext.hpp"
 #include "Rng.hpp"
+#include "Stage.hpp"
 #include "Supervisor.hpp"
 #include "TextHelper.hpp"
+#include "Th07EffectTables.hpp"
 #include "ZunMath.hpp"
 #include "i18n.hpp"
 #include "utils.hpp"
 
+#include <algorithm>
+#include <cstring>
+#include <math.h>
 #include <stdio.h>
 
 namespace th07
@@ -16,6 +21,365 @@ DIFFABLE_STATIC(VertexTex1Xyzrwh, g_PrimitivesToDrawVertexBuf[4]);
 DIFFABLE_STATIC(VertexTex1DiffuseXyzrwh, g_PrimitivesToDrawNoVertexBuf[4]);
 DIFFABLE_STATIC(VertexTex1DiffuseXyz, g_PrimitivesToDrawUnknown[4]);
 DIFFABLE_STATIC(AnmManager *, g_AnmManager)
+DIFFABLE_STATIC_ASSIGN(u32, g_Th07AnmManagerColorMultiplier) = 0x80808080;
+DIFFABLE_STATIC_ASSIGN(i32, g_Th07AnmManagerColorMultiplierEnabled) = 0;
+DIFFABLE_STATIC_ASSIGN(i32, g_Th07AnmManagerSubmittedQuadCount) = 0;
+DIFFABLE_STATIC_ASSIGN(f32, g_Th07AnmManagerDrawOffsetX) = 0.0f;
+DIFFABLE_STATIC_ASSIGN(f32, g_Th07AnmManagerDrawOffsetY) = 0.0f;
+
+namespace {
+
+f32 ReadTh07AnmVmDrawF32(const void *vm, u32 offset)
+{
+    f32 value = 0.0f;
+    memcpy(&value, reinterpret_cast<const u8 *>(vm) + offset, sizeof(value));
+    return value;
+}
+
+u8 ReadTh07AnmVmDrawU8(const void *vm, u32 offset)
+{
+    return *(reinterpret_cast<const u8 *>(vm) + offset);
+}
+
+u32 ReadTh07AnmVmDrawU32(const void *vm, u32 offset)
+{
+    u32 value = 0;
+    memcpy(&value, reinterpret_cast<const u8 *>(vm) + offset, sizeof(value));
+    return value;
+}
+
+void WriteTh07AnmVmDrawU32(void *vm, u32 offset, u32 value)
+{
+    memcpy(reinterpret_cast<u8 *>(vm) + offset, &value, sizeof(value));
+}
+
+D3DXVECTOR3 ReadTh07AnmVmDrawVector3(const void *vm, u32 offset)
+{
+    D3DXVECTOR3 value = {};
+    memcpy(&value, reinterpret_cast<const u8 *>(vm) + offset, sizeof(value));
+    return value;
+}
+
+D3DXMATRIX ReadTh07AnmVmDrawMatrix(const void *vm, u32 offset)
+{
+    D3DXMATRIX value = {};
+    memcpy(&value, reinterpret_cast<const u8 *>(vm) + offset, sizeof(value));
+    return value;
+}
+
+void WriteTh07AnmVmDrawMatrix(void *vm, u32 offset, const D3DXMATRIX &value)
+{
+    memcpy(reinterpret_cast<u8 *>(vm) + offset, &value, sizeof(value));
+}
+
+AnmLoadedSprite *ReadTh07AnmVmDrawSprite(void *vm)
+{
+    AnmLoadedSprite *sprite = nullptr;
+    memcpy(&sprite, reinterpret_cast<const u8 *>(vm) + kTh07AnmVmLoadedSpriteOffset, sizeof(sprite));
+    return sprite;
+}
+
+bool IsTh07AnmVmDrawable(void *vm)
+{
+    const u32 renderFlags = ReadTh07AnmVmDrawU32(vm, kTh07AnmVmRenderFlagsOffset);
+    return (renderFlags & kTh07AnmVmRenderFlagActive) != 0 &&
+           (renderFlags & kTh07AnmVmRenderFlagDrawable) != 0 &&
+           ReadTh07AnmVmDrawU8(vm, kTh07AnmVmVisibilityByteOffset) != 0 &&
+           ReadTh07AnmVmDrawSprite(vm) != nullptr;
+}
+
+void TranslateTh07AnmVmDrawVertex(VertexTex1Xyzrwh *vertex,
+                                  f32 x,
+                                  f32 y,
+                                  f32 sine,
+                                  f32 cosine,
+                                  f32 xOffset,
+                                  f32 yOffset)
+{
+    vertex->position.x = x * cosine - y * sine + xOffset;
+    vertex->position.y = y * cosine + x * sine + yOffset;
+}
+
+bool Th07AnmVmDrawQuadIntersectsViewport()
+{
+    const f32 maxX = std::max(std::max(g_PrimitivesToDrawVertexBuf[0].position.x,
+                                       g_PrimitivesToDrawVertexBuf[1].position.x),
+                              std::max(g_PrimitivesToDrawVertexBuf[2].position.x,
+                                       g_PrimitivesToDrawVertexBuf[3].position.x));
+    const f32 maxY = std::max(std::max(g_PrimitivesToDrawVertexBuf[0].position.y,
+                                       g_PrimitivesToDrawVertexBuf[1].position.y),
+                              std::max(g_PrimitivesToDrawVertexBuf[2].position.y,
+                                       g_PrimitivesToDrawVertexBuf[3].position.y));
+    const f32 minX = std::min(std::min(g_PrimitivesToDrawVertexBuf[0].position.x,
+                                       g_PrimitivesToDrawVertexBuf[1].position.x),
+                              std::min(g_PrimitivesToDrawVertexBuf[2].position.x,
+                                       g_PrimitivesToDrawVertexBuf[3].position.x));
+    const f32 minY = std::min(std::min(g_PrimitivesToDrawVertexBuf[0].position.y,
+                                       g_PrimitivesToDrawVertexBuf[1].position.y),
+                              std::min(g_PrimitivesToDrawVertexBuf[2].position.y,
+                                       g_PrimitivesToDrawVertexBuf[3].position.y));
+
+    return static_cast<f32>(g_Supervisor.viewport.X) <= maxX &&
+           static_cast<f32>(g_Supervisor.viewport.Y) <= maxY &&
+           minX <= static_cast<f32>(g_Supervisor.viewport.X + g_Supervisor.viewport.Width) &&
+           minY <= static_cast<f32>(g_Supervisor.viewport.Y + g_Supervisor.viewport.Height);
+}
+
+AnmVm BuildTh07AnmVmDrawBackendVm(void *th07Vm)
+{
+    AnmVm backend = *reinterpret_cast<AnmVm *>(th07Vm);
+    const u32 renderFlags = ReadTh07AnmVmDrawU32(th07Vm, kTh07AnmVmRenderFlagsOffset);
+
+    backend.rotation = ReadTh07AnmVmDrawVector3(th07Vm, kTh07AnmVmRotationOffset);
+    backend.scaleX = ReadTh07AnmVmDrawF32(th07Vm, kTh07AnmVmScaleXOffset);
+    backend.scaleY = ReadTh07AnmVmDrawF32(th07Vm, kTh07AnmVmScaleYOffset);
+    backend.uvScrollPos.x = ReadTh07AnmVmDrawF32(th07Vm, kTh07AnmVmAngleField28Offset);
+    backend.uvScrollPos.y = ReadTh07AnmVmDrawF32(th07Vm, kTh07AnmVmAngleField2cOffset);
+    backend.pos = ReadTh07AnmVmDrawVector3(th07Vm, kTh07AnmVmDrawPositionOffset);
+    backend.sprite = ReadTh07AnmVmDrawSprite(th07Vm);
+    backend.color = (renderFlags & kTh07AnmVmRenderFlagUseAlternateColor) != 0
+                        ? ReadTh07AnmVmDrawU32(th07Vm, kTh07AnmVmAlternateColorOffset)
+                        : ReadTh07AnmVmDrawU32(th07Vm, kTh07AnmVmColorOffset);
+    backend.flags.isVisible = 1;
+    backend.flags.flag1 = 1;
+    backend.flags.blendMode = (renderFlags & kTh07AnmVmRenderFlagBit4) != 0;
+    backend.flags.colorOp = AnmVmColorOp_Modulate;
+    backend.flags.anchor = static_cast<u16>((renderFlags & kTh07AnmVmRenderFlagAnchorTopLeft) >> 10);
+    backend.flags.zWriteDisable = (renderFlags & kTh07AnmVmRenderFlagBit12) != 0;
+    return backend;
+}
+
+void ApplyTh07AnmVmScreenQuadAnchors(const AnmVm &backend, f32 halfWidth, f32 halfHeight)
+{
+    if ((backend.flags.anchor & AnmVmAnchor_Left) != 0)
+    {
+        for (VertexTex1Xyzrwh &vertex : g_PrimitivesToDrawVertexBuf)
+        {
+            vertex.position.x += halfWidth;
+        }
+    }
+    if ((backend.flags.anchor & AnmVmAnchor_Top) != 0)
+    {
+        for (VertexTex1Xyzrwh &vertex : g_PrimitivesToDrawVertexBuf)
+        {
+            vertex.position.y += halfHeight;
+        }
+    }
+}
+
+void BuildTh07AnmVmNoRotationQuad(const AnmVm &backend, f32 halfWidth, f32 halfHeight)
+{
+    if ((backend.flags.anchor & AnmVmAnchor_Left) == 0)
+    {
+        g_PrimitivesToDrawVertexBuf[0].position.x = backend.pos.x - halfWidth;
+        g_PrimitivesToDrawVertexBuf[2].position.x = backend.pos.x - halfWidth;
+        g_PrimitivesToDrawVertexBuf[1].position.x = backend.pos.x + halfWidth;
+        g_PrimitivesToDrawVertexBuf[3].position.x = backend.pos.x + halfWidth;
+    }
+    else
+    {
+        g_PrimitivesToDrawVertexBuf[0].position.x = backend.pos.x;
+        g_PrimitivesToDrawVertexBuf[2].position.x = backend.pos.x;
+        g_PrimitivesToDrawVertexBuf[1].position.x = backend.pos.x + halfWidth + halfWidth;
+        g_PrimitivesToDrawVertexBuf[3].position.x = backend.pos.x + halfWidth + halfWidth;
+    }
+
+    if ((backend.flags.anchor & AnmVmAnchor_Top) == 0)
+    {
+        g_PrimitivesToDrawVertexBuf[0].position.y = backend.pos.y - halfHeight;
+        g_PrimitivesToDrawVertexBuf[1].position.y = backend.pos.y - halfHeight;
+        g_PrimitivesToDrawVertexBuf[2].position.y = backend.pos.y + halfHeight;
+        g_PrimitivesToDrawVertexBuf[3].position.y = backend.pos.y + halfHeight;
+    }
+    else
+    {
+        g_PrimitivesToDrawVertexBuf[0].position.y = backend.pos.y;
+        g_PrimitivesToDrawVertexBuf[1].position.y = backend.pos.y;
+        g_PrimitivesToDrawVertexBuf[2].position.y = backend.pos.y + halfHeight + halfHeight;
+        g_PrimitivesToDrawVertexBuf[3].position.y = backend.pos.y + halfHeight + halfHeight;
+    }
+}
+
+void BuildTh07AnmVmRotatedQuad(const AnmVm &backend, f32 halfWidth, f32 halfHeight)
+{
+    const f32 sine = sinf(backend.rotation.z);
+    const f32 cosine = cosf(backend.rotation.z);
+
+    TranslateTh07AnmVmDrawVertex(&g_PrimitivesToDrawVertexBuf[0], -halfWidth, -halfHeight, sine, cosine,
+                                 backend.pos.x, backend.pos.y);
+    TranslateTh07AnmVmDrawVertex(&g_PrimitivesToDrawVertexBuf[1], halfWidth, -halfHeight, sine, cosine,
+                                 backend.pos.x, backend.pos.y);
+    TranslateTh07AnmVmDrawVertex(&g_PrimitivesToDrawVertexBuf[2], -halfWidth, halfHeight, sine, cosine,
+                                 backend.pos.x, backend.pos.y);
+    TranslateTh07AnmVmDrawVertex(&g_PrimitivesToDrawVertexBuf[3], halfWidth, halfHeight, sine, cosine,
+                                 backend.pos.x, backend.pos.y);
+    ApplyTh07AnmVmScreenQuadAnchors(backend, halfWidth, halfHeight);
+}
+
+void SetTh07AnmVmDrawQuadZ(f32 z)
+{
+    g_PrimitivesToDrawVertexBuf[0].position.z = z;
+    g_PrimitivesToDrawVertexBuf[1].position.z = z;
+    g_PrimitivesToDrawVertexBuf[2].position.z = z;
+    g_PrimitivesToDrawVertexBuf[3].position.z = z;
+}
+
+u8 MultiplyTh07AnmVmColorComponent(u8 component, u8 multiplier)
+{
+    const u32 scaled = (static_cast<u32>(component) * static_cast<u32>(multiplier)) >> 7;
+    return scaled > 0xff ? 0xff : static_cast<u8>(scaled);
+}
+
+ZunColor ApplyTh07AnmManagerColorMultiplier(ZunColor color)
+{
+    if (g_Th07AnmManagerColorMultiplierEnabled == 0)
+    {
+        return color;
+    }
+
+    const u8 blue = MultiplyTh07AnmVmColorComponent(color & 0xff, g_Th07AnmManagerColorMultiplier & 0xff);
+    const u8 green =
+        MultiplyTh07AnmVmColorComponent((color >> 8) & 0xff, (g_Th07AnmManagerColorMultiplier >> 8) & 0xff);
+    const u8 red =
+        MultiplyTh07AnmVmColorComponent((color >> 16) & 0xff, (g_Th07AnmManagerColorMultiplier >> 16) & 0xff);
+    const u8 alpha =
+        MultiplyTh07AnmVmColorComponent((color >> 24) & 0xff, (g_Th07AnmManagerColorMultiplier >> 24) & 0xff);
+    return (static_cast<ZunColor>(alpha) << 24) | (static_cast<ZunColor>(red) << 16) |
+           (static_cast<ZunColor>(green) << 8) | blue;
+}
+
+void OffsetTh07AnmVmDrawQuadByManager()
+{
+    for (VertexTex1Xyzrwh &vertex : g_PrimitivesToDrawVertexBuf)
+    {
+        vertex.position.x += g_Th07AnmManagerDrawOffsetX;
+        vertex.position.y += g_Th07AnmManagerDrawOffsetY;
+    }
+}
+
+void SnapTh07AnmVmDrawQuadToPixels()
+{
+    g_PrimitivesToDrawVertexBuf[0].position.x = nearbyintf(g_PrimitivesToDrawVertexBuf[0].position.x) - 0.5f;
+    g_PrimitivesToDrawVertexBuf[1].position.x = nearbyintf(g_PrimitivesToDrawVertexBuf[1].position.x) - 0.5f;
+    g_PrimitivesToDrawVertexBuf[0].position.y = nearbyintf(g_PrimitivesToDrawVertexBuf[0].position.y) - 0.5f;
+    g_PrimitivesToDrawVertexBuf[2].position.y = nearbyintf(g_PrimitivesToDrawVertexBuf[2].position.y) - 0.5f;
+    g_PrimitivesToDrawVertexBuf[2].position.x = g_PrimitivesToDrawVertexBuf[0].position.x;
+    g_PrimitivesToDrawVertexBuf[3].position.x = g_PrimitivesToDrawVertexBuf[1].position.x;
+    g_PrimitivesToDrawVertexBuf[1].position.y = g_PrimitivesToDrawVertexBuf[0].position.y;
+    g_PrimitivesToDrawVertexBuf[3].position.y = g_PrimitivesToDrawVertexBuf[2].position.y;
+}
+
+void SetTh07AnmVmDrawQuadUv(const AnmVm &backend)
+{
+    g_PrimitivesToDrawVertexBuf[0].textureUV.x = g_PrimitivesToDrawVertexBuf[2].textureUV.x =
+        backend.sprite->uvStart.x + backend.uvScrollPos.x;
+    g_PrimitivesToDrawVertexBuf[1].textureUV.x = g_PrimitivesToDrawVertexBuf[3].textureUV.x =
+        backend.sprite->uvEnd.x + backend.uvScrollPos.x;
+    g_PrimitivesToDrawVertexBuf[0].textureUV.y = g_PrimitivesToDrawVertexBuf[1].textureUV.y =
+        backend.sprite->uvStart.y + backend.uvScrollPos.y;
+    g_PrimitivesToDrawVertexBuf[2].textureUV.y = g_PrimitivesToDrawVertexBuf[3].textureUV.y =
+        backend.sprite->uvEnd.y + backend.uvScrollPos.y;
+}
+
+void CopyTh07AnmVmDrawQuadToDiffuseVertices(ZunColor color)
+{
+    for (i32 idx = 0; idx < 4; idx++)
+    {
+        g_PrimitivesToDrawNoVertexBuf[idx].position = g_PrimitivesToDrawVertexBuf[idx].position;
+        g_PrimitivesToDrawNoVertexBuf[idx].diffuse = color;
+        g_PrimitivesToDrawNoVertexBuf[idx].textureUV = g_PrimitivesToDrawVertexBuf[idx].textureUV;
+    }
+}
+
+void ApplyTh07AnmVmSubmitRenderState(AnmManager *manager, const AnmVm &backend)
+{
+    if (manager->currentBlendMode != backend.flags.blendMode)
+    {
+        manager->currentBlendMode = backend.flags.blendMode;
+        if (manager->currentBlendMode == AnmVmBlendMode_InvSrcAlpha)
+        {
+            g_Supervisor.d3dDevice->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_INVSRCALPHA);
+        }
+        else
+        {
+            g_Supervisor.d3dDevice->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_ONE);
+        }
+    }
+    if ((((g_Supervisor.cfg.opts >> GCOS_TURN_OFF_DEPTH_TEST) & 1) == 0) &&
+        (manager->currentZWriteDisable != backend.flags.zWriteDisable))
+    {
+        manager->currentZWriteDisable = backend.flags.zWriteDisable;
+        if (manager->currentZWriteDisable == 0)
+        {
+            g_Supervisor.d3dDevice->SetRenderState(D3DRS_ZWRITEENABLE, 1);
+        }
+        else
+        {
+            g_Supervisor.d3dDevice->SetRenderState(D3DRS_ZWRITEENABLE, 0);
+        }
+    }
+    g_Th07AnmManagerSubmittedQuadCount++;
+}
+
+ZunResult SubmitTh07AnmVmDrawQuad(AnmManager *manager, AnmVm *backend, i32 submitFlags)
+{
+    OffsetTh07AnmVmDrawQuadByManager();
+    if ((submitFlags & 1) != 0)
+    {
+        SnapTh07AnmVmDrawQuadToPixels();
+    }
+    SetTh07AnmVmDrawQuadUv(*backend);
+    manager->currentSprite = nullptr;
+
+    if (!Th07AnmVmDrawQuadIntersectsViewport())
+    {
+        return ZUN_SUCCESS;
+    }
+
+    if (manager->currentTexture != manager->textures[backend->sprite->sourceFileIndex])
+    {
+        manager->currentTexture = manager->textures[backend->sprite->sourceFileIndex];
+        g_Supervisor.d3dDevice->SetTexture(0, manager->currentTexture);
+    }
+    if (manager->currentVertexShader != 1)
+    {
+        g_Supervisor.d3dDevice->SetVertexShader(D3DFVF_TEX1 | D3DFVF_DIFFUSE | D3DFVF_XYZRHW);
+        manager->currentVertexShader = 1;
+    }
+    if ((submitFlags & 2) == 0)
+    {
+        backend->color = ApplyTh07AnmManagerColorMultiplier(backend->color);
+    }
+    CopyTh07AnmVmDrawQuadToDiffuseVertices(backend->color);
+    ApplyTh07AnmVmSubmitRenderState(manager, *backend);
+    g_Supervisor.d3dDevice->DrawPrimitiveUP(D3DPT_TRIANGLESTRIP, 2, g_PrimitivesToDrawNoVertexBuf, 0x1c);
+    return ZUN_SUCCESS;
+}
+
+} // namespace
+
+void SetTh07AnmManagerDrawOffset(f32 x, f32 y)
+{
+    g_Th07AnmManagerDrawOffsetX = x;
+    g_Th07AnmManagerDrawOffsetY = y;
+}
+
+void ResetTh07AnmManagerDrawOffset()
+{
+    SetTh07AnmManagerDrawOffset(0.0f, 0.0f);
+}
+
+void SetTh07AnmManagerColorMultiplier(ZunColor color)
+{
+    g_Th07AnmManagerColorMultiplier = color;
+    g_Th07AnmManagerColorMultiplierEnabled = 1;
+}
+
+void ResetTh07AnmManagerColorMultiplier()
+{
+    g_Th07AnmManagerColorMultiplier = 0x80808080;
+    g_Th07AnmManagerColorMultiplierEnabled = 0;
+}
 
 #ifndef DIFFBUILD
 D3DFORMAT g_TextureFormatD3D8Mapping[6] = {
@@ -98,6 +462,9 @@ AnmManager::AnmManager()
     this->currentVertexShader = 0;
     this->currentZWriteDisable = 0;
     this->screenshotTextureId = -1;
+    ResetTh07AnmManagerDrawOffset();
+    ResetTh07AnmManagerColorMultiplier();
+    g_Th07AnmManagerSubmittedQuadCount = 0;
 }
 
 void AnmManager::SetupVertexBuffer()
@@ -664,6 +1031,129 @@ ZunResult AnmManager::DrawInner(AnmVm *vm, i32 param_3)
         g_Supervisor.d3dDevice->DrawPrimitiveUP(D3DPT_TRIANGLESTRIP, 2, g_PrimitivesToDrawNoVertexBuf, 0x1c);
     }
     return ZUN_SUCCESS;
+}
+
+ZunResult AnmManager::DrawTh07ScreenQuad(void *th07Vm)
+{
+    if (!IsTh07AnmVmDrawable(th07Vm))
+    {
+        return ZUN_ERROR;
+    }
+
+    AnmVm backend = BuildTh07AnmVmDrawBackendVm(th07Vm);
+    const f32 halfWidth = (backend.sprite->widthPx * backend.scaleX) / 2.0f;
+    const f32 halfHeight = (backend.sprite->heightPx * backend.scaleY) / 2.0f;
+    const i32 snapToPixels = backend.rotation.z == 0.0f ? 1 : 0;
+
+    if (snapToPixels != 0)
+    {
+        BuildTh07AnmVmNoRotationQuad(backend, halfWidth, halfHeight);
+    }
+    else
+    {
+        BuildTh07AnmVmRotatedQuad(backend, halfWidth, halfHeight);
+    }
+    SetTh07AnmVmDrawQuadZ(backend.pos.z);
+    return SubmitTh07AnmVmDrawQuad(this, &backend, snapToPixels);
+}
+
+ZunResult AnmManager::DrawTh07CameraProjected(void *th07Vm)
+{
+    if (!IsTh07AnmVmDrawable(th07Vm))
+    {
+        return ZUN_ERROR;
+    }
+
+    AnmVm backend = BuildTh07AnmVmDrawBackendVm(th07Vm);
+    D3DXMATRIX worldMatrix;
+    D3DXMatrixIdentity(&worldMatrix);
+
+    D3DXVECTOR3 projectedCenter = {};
+    D3DXVECTOR3 projectedSide = {};
+    D3DXVECTOR3 origin = {};
+    D3DXVec3Project(&projectedCenter, &backend.pos, &g_Supervisor.viewport, &g_Supervisor.projectionMatrix,
+                    &g_Supervisor.viewMatrix, &worldMatrix);
+    if (projectedCenter.z < 0.0f || projectedCenter.z > 1.0f)
+    {
+        return ZUN_ERROR;
+    }
+    D3DXVec3Project(&projectedSide, &g_Stage.th07CameraCurrentBasis.sideVector, &g_Supervisor.viewport,
+                    &g_Supervisor.projectionMatrix, &g_Supervisor.viewMatrix, &worldMatrix);
+
+    origin.x = projectedSide.x - projectedCenter.x;
+    origin.y = projectedSide.y - projectedCenter.y;
+    origin.z = projectedSide.z - projectedCenter.z;
+    const f32 projectedScale = sqrtf(origin.x * origin.x + origin.y * origin.y + origin.z * origin.z) * 0.5f;
+    const f32 halfWidth = projectedScale * backend.sprite->widthPx * backend.scaleX;
+    const f32 halfHeight = projectedScale * backend.sprite->heightPx * backend.scaleY;
+
+    backend.pos.x = projectedCenter.x;
+    backend.pos.y = projectedCenter.y;
+    backend.pos.z = projectedCenter.z;
+    BuildTh07AnmVmRotatedQuad(backend, halfWidth, halfHeight);
+    SetTh07AnmVmDrawQuadZ(projectedCenter.z);
+    return SubmitTh07AnmVmDrawQuad(this, &backend, 0);
+}
+
+ZunResult AnmManager::DrawTh07TransformedCameraProjected(void *th07Vm)
+{
+    if (!IsTh07AnmVmDrawable(th07Vm))
+    {
+        return ZUN_ERROR;
+    }
+
+    AnmVm backend = BuildTh07AnmVmDrawBackendVm(th07Vm);
+    u32 renderFlags = ReadTh07AnmVmDrawU32(th07Vm, kTh07AnmVmRenderFlagsOffset);
+    D3DXMATRIX activeMatrix = ReadTh07AnmVmDrawMatrix(th07Vm, kTh07AnmVmActiveTransformMatrixOffset);
+
+    if ((renderFlags & kTh07AnmVmRenderFlagSkipTransformRebuild) == 0 &&
+        (renderFlags & (kTh07AnmVmRenderFlagScaleDirty | kTh07AnmVmRenderFlagRotationDirty)) != 0)
+    {
+        activeMatrix = ReadTh07AnmVmDrawMatrix(th07Vm, kTh07AnmVmBaseTransformMatrixOffset);
+        activeMatrix.m[0][0] *= backend.scaleX;
+        activeMatrix.m[1][1] *= backend.scaleY;
+        renderFlags &= ~kTh07AnmVmRenderFlagScaleDirty;
+
+        D3DXMATRIX rotationMatrix;
+        if (backend.rotation.x != 0.0f)
+        {
+            D3DXMatrixRotationX(&rotationMatrix, backend.rotation.x);
+            D3DXMatrixMultiply(&activeMatrix, &activeMatrix, &rotationMatrix);
+        }
+        if (backend.rotation.y != 0.0f)
+        {
+            D3DXMatrixRotationY(&rotationMatrix, backend.rotation.y);
+            D3DXMatrixMultiply(&activeMatrix, &activeMatrix, &rotationMatrix);
+        }
+        if (backend.rotation.z != 0.0f)
+        {
+            D3DXMatrixRotationZ(&rotationMatrix, backend.rotation.z);
+            D3DXMatrixMultiply(&activeMatrix, &activeMatrix, &rotationMatrix);
+        }
+        renderFlags &= ~kTh07AnmVmRenderFlagRotationDirty;
+        WriteTh07AnmVmDrawMatrix(th07Vm, kTh07AnmVmActiveTransformMatrixOffset, activeMatrix);
+        WriteTh07AnmVmDrawU32(th07Vm, kTh07AnmVmRenderFlagsOffset, renderFlags);
+    }
+
+    activeMatrix.m[3][0] = backend.pos.x;
+    activeMatrix.m[3][1] = backend.pos.y;
+    activeMatrix.m[3][2] = backend.pos.z;
+    if ((renderFlags & kTh07AnmVmRenderFlagAnchorX) != 0)
+    {
+        activeMatrix.m[3][0] += fabsf((backend.sprite->widthPx * backend.scaleX) / 2.0f);
+    }
+    if ((renderFlags & kTh07AnmVmRenderFlagAnchorY) != 0)
+    {
+        activeMatrix.m[3][1] += fabsf((backend.sprite->heightPx * backend.scaleY) / 2.0f);
+    }
+
+    for (i32 idx = 0; idx < 4; idx++)
+    {
+        D3DXVec3Project(reinterpret_cast<D3DXVECTOR3 *>(&g_PrimitivesToDrawVertexBuf[idx].position),
+                        &this->vertexBufferContents[idx].position, &g_Supervisor.viewport,
+                        &g_Supervisor.projectionMatrix, &g_Supervisor.viewMatrix, &activeMatrix);
+    }
+    return SubmitTh07AnmVmDrawQuad(this, &backend, 0);
 }
 
 ZunResult AnmManager::DrawNoRotation(AnmVm *vm)
