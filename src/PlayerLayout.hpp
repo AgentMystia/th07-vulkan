@@ -52,13 +52,24 @@ inline constexpr std::uint32_t kPlayerBombHorizontalSpeedMultiplierOffset = 0x23
 inline constexpr std::uint32_t kPlayerBombVerticalSpeedMultiplierOffset = 0x23f4;
 inline constexpr std::uint32_t kPlayerCurrentPowerOffset = 0x23f8;
 inline constexpr std::uint32_t kPlayerMode3LockoutTimerOffset = 0x23fc;
+inline constexpr std::uint32_t kPlayerModeSoundTimerOffset = 0x2400;
 inline constexpr std::uint32_t kPlayerModeStateOffset = 0x2408;
-inline constexpr std::uint32_t kPlayerModeDrawEnabledOffset = 0x240a;
+inline constexpr std::uint32_t kPlayerOptionStateOffset = 0x240a;
+inline constexpr std::uint32_t kPlayerModeDrawEnabledOffset = kPlayerOptionStateOffset;
+inline constexpr std::uint32_t kPlayerFocusHeldOffset = 0x240b;
 inline constexpr std::uint32_t kPlayerModeTransitionRequestOffset = 0x240d;
+inline constexpr std::uint32_t kPlayerOptionInterpolationPreviousFrameOffset = 0x2410;
+inline constexpr std::uint32_t kPlayerOptionInterpolationSubframeOffset = 0x2414;
+inline constexpr std::uint32_t kPlayerOptionInterpolationFrameOffset = 0x2418;
 inline constexpr std::uint32_t kPlayerModeTransitionEffectActivePointerOffset = 0x0b7e6c;
 inline constexpr std::uint32_t kPlayerPrimaryAnmScript = 0x0400;
 inline constexpr std::uint32_t kPlayerLeftOptionAnmScript = 0x0480;
 inline constexpr std::uint32_t kPlayerRightOptionAnmScript = 0x0481;
+inline constexpr std::uint8_t kPlayerOptionStateHidden = 0;
+inline constexpr std::uint8_t kPlayerOptionStateUnfocused = 1;
+inline constexpr std::uint8_t kPlayerOptionStateFocusing = 2;
+inline constexpr std::uint8_t kPlayerOptionStateFocused = 3;
+inline constexpr std::uint8_t kPlayerOptionStateUnfocusing = 4;
 
 inline constexpr std::uint32_t kPlayerInitFunctionAddress = 0x004423e0;
 inline constexpr std::uint32_t kPlayerMovementFunctionAddress = 0x0043ee50;
@@ -95,5 +106,11 @@ static_assert(kPlayerRightOptionAnmVmDrawPositionOffset == 0x0660);
 static_assert(kPlayerLeftOptionPositionOffset == kPlayerGrabItemSizeOffset + kPlayerVectorSize);
 static_assert(kPlayerRightOptionPositionOffset == kPlayerLeftOptionPositionOffset + kPlayerVectorSize);
 static_assert(kPlayerMovementDeltaYOffset == 0x09d0);
+static_assert(kPlayerOptionStateOffset == kPlayerModeDrawEnabledOffset);
+static_assert(kPlayerFocusHeldOffset == kPlayerOptionStateOffset + 1);
+static_assert(kPlayerOptionInterpolationSubframeOffset ==
+              kPlayerOptionInterpolationPreviousFrameOffset + 4);
+static_assert(kPlayerOptionInterpolationFrameOffset == kPlayerOptionInterpolationSubframeOffset + 4);
+static_assert(kPlayerOptionStateFocused == 3);
 
 } // namespace th07

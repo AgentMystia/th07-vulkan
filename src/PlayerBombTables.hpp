@@ -31,6 +31,9 @@ inline constexpr std::uint32_t kPlayerBombTimerFrameOffset = 0x16a38;
 inline constexpr std::uint32_t kPlayerBombCommonEffectXOffset = 0x16a00;
 inline constexpr std::uint32_t kPlayerBombCommonEffectYOffset = 0x16a04;
 inline constexpr std::uint32_t kPlayerBombCommonEffectDurationOffset = 0x16a08;
+inline constexpr std::uint32_t kPlayerMode4EffectStartXOffset = 0x16a0c;
+inline constexpr std::uint32_t kPlayerMode4EffectStartYOffset = 0x16a10;
+inline constexpr std::uint32_t kPlayerMode4EffectStartDurationOffset = 0x16a14;
 inline constexpr std::uint32_t kPlayerBombCommonEffectXGlobalAddress =
     kPlayerObjectAddress + kPlayerBombCommonEffectXOffset;
 inline constexpr std::uint32_t kPlayerBombCommonEffectYGlobalAddress =
@@ -69,6 +72,7 @@ inline constexpr std::int32_t kPlayerMode4CommonEffectDurationFrames = 0x21c;
 inline constexpr std::int32_t kPlayerMode3CommonEffectDurationFrames = 0x28;
 inline constexpr std::int32_t kPlayerMode3EffectInterpolationDurationFrames = 0x1e;
 inline constexpr std::int32_t kPlayerMode1CleanupCommonEffectDurationFrames = 0xf0;
+inline constexpr std::int32_t kPlayerInitialCommonEffectDurationFrames = 0x78;
 inline constexpr std::int32_t kPlayerMode4StageColorFadeInFrames = 0x1e;
 inline constexpr std::int32_t kPlayerMode4StageColorFadeOutStartFrame = 0x1fe;
 inline constexpr std::int32_t kPlayerMode4StageColorTotalFrames = 0x21c;
@@ -136,6 +140,36 @@ struct PlayerModeTransitionEffectConfig {
     std::uint32_t activePointerOffset;
 };
 
+struct PlayerInitialModeOwnerState {
+    std::uint8_t modeState;
+    std::uint8_t optionState;
+    std::uint8_t focusHeld;
+    std::uint8_t transitionRequest;
+    std::uint32_t commonEffectXBits;
+    std::uint32_t commonEffectYBits;
+    std::int32_t commonEffectDurationFrames;
+};
+
+struct PlayerMode4EntryOwnerState {
+    std::uint8_t modeState;
+    std::uint8_t transitionRequest;
+    std::uint32_t commonEffectXBits;
+    std::uint32_t commonEffectYBits;
+    std::int32_t commonEffectDurationFrames;
+    std::uint32_t effectStartXBits;
+    std::uint32_t effectStartYBits;
+    std::int32_t effectStartDurationFrames;
+};
+
+struct PlayerMode3EntryOwnerState {
+    std::uint8_t modeState;
+    std::uint8_t transitionRequest;
+    std::uint32_t commonEffectXBits;
+    std::uint32_t commonEffectYBits;
+    std::int32_t commonEffectDurationFrames;
+    std::int32_t lockoutFrames;
+};
+
 enum class PlayerBombRoutineSlot {
     UnfocusedCalc = 0,
     UnfocusedDraw = 1,
@@ -194,6 +228,9 @@ PlayerBombCommonEffectConfig BuildPlayerBombCommonEffectConfig(std::uint32_t tar
                                                                std::int32_t durationFrames);
 PlayerModeTransitionEffectConfig BuildPlayerMode4TransitionEffectConfig();
 PlayerModeTransitionEffectConfig BuildPlayerMode3TransitionEffectConfig();
+PlayerInitialModeOwnerState BuildPlayerInitialModeOwnerState();
+PlayerMode4EntryOwnerState BuildPlayerMode4EntryOwnerState();
+PlayerMode3EntryOwnerState BuildPlayerMode3EntryOwnerState();
 std::uint32_t ComputePlayerBombBackdropColor(std::int32_t timerFrame, std::int32_t durationFrames);
 std::uint32_t ComputePlayerMode4StageColor(std::int32_t mode4Frame);
 std::int32_t ApplyPlayerBombScoreDrainDifficultyScale(std::int32_t scoreDrain, Th07Difficulty difficulty);

@@ -195,6 +195,45 @@ PlayerModeTransitionEffectConfig BuildPlayerMode3TransitionEffectConfig()
     };
 }
 
+PlayerInitialModeOwnerState BuildPlayerInitialModeOwnerState()
+{
+    return {
+        kPlayerModeState1,
+        kPlayerOptionStateUnfocused,
+        0,
+        kPlayerModeTransitionRequestIdle,
+        kPlayerBombCommonEffectResetXBits,
+        kPlayerBombCommonEffectResetYBits,
+        kPlayerInitialCommonEffectDurationFrames,
+    };
+}
+
+PlayerMode4EntryOwnerState BuildPlayerMode4EntryOwnerState()
+{
+    return {
+        kPlayerModeState4,
+        kPlayerModeTransitionRequestStartMode4,
+        kPlayerBombCommonEffectResetXBits,
+        kPlayerBombCommonEffectResetYBits,
+        kPlayerMode4CommonEffectDurationFrames,
+        kPlayerBombCommonEffectResetXBits,
+        kPlayerBombCommonEffectResetYBits,
+        kPlayerMode4CommonEffectDurationFrames,
+    };
+}
+
+PlayerMode3EntryOwnerState BuildPlayerMode3EntryOwnerState()
+{
+    return {
+        kPlayerModeState3,
+        kPlayerModeTransitionRequestIdle,
+        kPlayerBombCommonEffectResetXBits,
+        kPlayerBombCommonEffectResetYBits,
+        kPlayerMode3CommonEffectDurationFrames,
+        kPlayerMode3CommonEffectDurationFrames,
+    };
+}
+
 std::uint32_t ComputePlayerBombBackdropColor(std::int32_t timerFrame, std::int32_t durationFrames)
 {
     std::int32_t channel = kPlayerBombBackdropPlateauChannel;

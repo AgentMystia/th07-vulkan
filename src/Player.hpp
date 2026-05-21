@@ -221,6 +221,26 @@ struct Player
     static void DrawBullets(Player *p);
     static void DrawBulletExplosions(Player *p);
 
+    u8 &Th07ModeState()
+    {
+        return *reinterpret_cast<u8 *>(reinterpret_cast<u8 *>(this) + kPlayerModeStateOffset);
+    }
+
+    u8 &Th07OptionState()
+    {
+        return *reinterpret_cast<u8 *>(reinterpret_cast<u8 *>(this) + kPlayerOptionStateOffset);
+    }
+
+    u8 &Th07FocusHeld()
+    {
+        return *reinterpret_cast<u8 *>(reinterpret_cast<u8 *>(this) + kPlayerFocusHeldOffset);
+    }
+
+    u8 &Th07ModeTransitionRequest()
+    {
+        return *reinterpret_cast<u8 *>(reinterpret_cast<u8 *>(this) + kPlayerModeTransitionRequestOffset);
+    }
+
     f32 AngleFromPlayer(D3DXVECTOR3 *pos);
     f32 AngleToPlayer(D3DXVECTOR3 *pos);
     i32 CheckGraze(D3DXVECTOR3 *center, D3DXVECTOR3 *size);

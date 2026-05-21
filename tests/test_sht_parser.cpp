@@ -2161,6 +2161,9 @@ void CheckSyntheticFixture()
     assert(th07::kPlayerBombCommonEffectXOffset == 0x16a00);
     assert(th07::kPlayerBombCommonEffectYOffset == 0x16a04);
     assert(th07::kPlayerBombCommonEffectDurationOffset == 0x16a08);
+    assert(th07::kPlayerMode4EffectStartXOffset == 0x16a0c);
+    assert(th07::kPlayerMode4EffectStartYOffset == 0x16a10);
+    assert(th07::kPlayerMode4EffectStartDurationOffset == 0x16a14);
     assert(th07::kPlayerBombCommonEffectXGlobalAddress == 0x004d44d8);
     assert(th07::kPlayerBombCommonEffectYGlobalAddress == 0x004d44dc);
     assert(th07::kPlayerBombCommonEffectDurationGlobalAddress == 0x004d44e0);
@@ -2188,10 +2191,21 @@ void CheckSyntheticFixture()
     assert(th07::kPlayerBombVerticalSpeedMultiplierOffset == 0x23f4);
     assert(th07::kPlayerCurrentPowerOffset == 0x23f8);
     assert(th07::kPlayerMode3LockoutTimerOffset == 0x23fc);
+    assert(th07::kPlayerModeSoundTimerOffset == 0x2400);
     assert(th07::kPlayerModeStateOffset == 0x2408);
-    assert(th07::kPlayerModeDrawEnabledOffset == 0x240a);
+    assert(th07::kPlayerOptionStateOffset == 0x240a);
+    assert(th07::kPlayerModeDrawEnabledOffset == th07::kPlayerOptionStateOffset);
+    assert(th07::kPlayerFocusHeldOffset == 0x240b);
     assert(th07::kPlayerModeTransitionRequestOffset == 0x240d);
+    assert(th07::kPlayerOptionInterpolationPreviousFrameOffset == 0x2410);
+    assert(th07::kPlayerOptionInterpolationSubframeOffset == 0x2414);
+    assert(th07::kPlayerOptionInterpolationFrameOffset == 0x2418);
     assert(th07::kPlayerModeTransitionEffectActivePointerOffset == 0x0b7e6c);
+    assert(th07::kPlayerOptionStateHidden == 0);
+    assert(th07::kPlayerOptionStateUnfocused == 1);
+    assert(th07::kPlayerOptionStateFocusing == 2);
+    assert(th07::kPlayerOptionStateFocused == 3);
+    assert(th07::kPlayerOptionStateUnfocusing == 4);
     assert(th07::kPlayerBombStartupFallbackDurationFrames == 999);
     assert(th07::kPlayerBombPowerBonusOnStart == 6);
     assert(th07::kPlayerBombDefaultSpeedMultiplierBits == 0x3f800000);
@@ -2224,6 +2238,7 @@ void CheckSyntheticFixture()
     assert(th07::kPlayerMode3CommonEffectDurationFrames == 0x28);
     assert(th07::kPlayerMode3EffectInterpolationDurationFrames == 0x1e);
     assert(th07::kPlayerMode1CleanupCommonEffectDurationFrames == 0xf0);
+    assert(th07::kPlayerInitialCommonEffectDurationFrames == 0x78);
     assert(th07::kPlayerMode4StageColorFadeInFrames == 30);
     assert(th07::kPlayerMode4StageColorFadeOutStartFrame == 510);
     assert(th07::kPlayerMode4StageColorTotalFrames == 540);
@@ -2262,6 +2277,29 @@ void CheckSyntheticFixture()
     assert(th07::kPlayerMode4EffectFinalScaleBits == 0x3e800000);
     assert(th07::kPlayerMode3EffectInitialScaleBits == 0x3d800000);
     assert(th07::kPlayerMode3EffectFinalScaleBits == 0x3fa66666);
+    const th07::PlayerInitialModeOwnerState initialOwnerState =
+        th07::BuildPlayerInitialModeOwnerState();
+    assert(initialOwnerState.modeState == th07::kPlayerModeState1);
+    assert(initialOwnerState.optionState == th07::kPlayerOptionStateUnfocused);
+    assert(initialOwnerState.focusHeld == 0);
+    assert(initialOwnerState.transitionRequest == th07::kPlayerModeTransitionRequestIdle);
+    assert(initialOwnerState.commonEffectXBits == 0xfffffc19);
+    assert(initialOwnerState.commonEffectYBits == 0);
+    assert(initialOwnerState.commonEffectDurationFrames == 0x78);
+    const th07::PlayerMode4EntryOwnerState mode4OwnerState =
+        th07::BuildPlayerMode4EntryOwnerState();
+    assert(mode4OwnerState.modeState == th07::kPlayerModeState4);
+    assert(mode4OwnerState.transitionRequest == th07::kPlayerModeTransitionRequestStartMode4);
+    assert(mode4OwnerState.commonEffectDurationFrames == 0x21c);
+    assert(mode4OwnerState.effectStartXBits == mode4OwnerState.commonEffectXBits);
+    assert(mode4OwnerState.effectStartYBits == mode4OwnerState.commonEffectYBits);
+    assert(mode4OwnerState.effectStartDurationFrames == mode4OwnerState.commonEffectDurationFrames);
+    const th07::PlayerMode3EntryOwnerState mode3OwnerState =
+        th07::BuildPlayerMode3EntryOwnerState();
+    assert(mode3OwnerState.modeState == th07::kPlayerModeState3);
+    assert(mode3OwnerState.transitionRequest == th07::kPlayerModeTransitionRequestIdle);
+    assert(mode3OwnerState.commonEffectDurationFrames == 0x28);
+    assert(mode3OwnerState.lockoutFrames == 0x28);
 }
 
 struct OriginalShtExpectation {

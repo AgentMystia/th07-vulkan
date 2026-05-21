@@ -18,6 +18,20 @@ int main()
     static_assert(th07::kPlayerMovementDeltaYOffset == 0x09d0);
     static_assert(th07::kPlayerBombVerticalSpeedMultiplierOffset ==
                   th07::kPlayerBombHorizontalSpeedMultiplierOffset + 4);
+    static_assert(th07::kPlayerModeSoundTimerOffset == 0x2400);
+    static_assert(th07::kPlayerModeStateOffset == 0x2408);
+    static_assert(th07::kPlayerOptionStateOffset == 0x240a);
+    static_assert(th07::kPlayerModeDrawEnabledOffset == th07::kPlayerOptionStateOffset);
+    static_assert(th07::kPlayerFocusHeldOffset == 0x240b);
+    static_assert(th07::kPlayerModeTransitionRequestOffset == 0x240d);
+    static_assert(th07::kPlayerOptionInterpolationPreviousFrameOffset == 0x2410);
+    static_assert(th07::kPlayerOptionInterpolationSubframeOffset == 0x2414);
+    static_assert(th07::kPlayerOptionInterpolationFrameOffset == 0x2418);
+    static_assert(th07::kPlayerOptionStateHidden == 0);
+    static_assert(th07::kPlayerOptionStateUnfocused == 1);
+    static_assert(th07::kPlayerOptionStateFocusing == 2);
+    static_assert(th07::kPlayerOptionStateFocused == 3);
+    static_assert(th07::kPlayerOptionStateUnfocusing == 4);
 
     assert(th07::kPlayerObjectClearSize == 0x0b7e78);
     return 0;
