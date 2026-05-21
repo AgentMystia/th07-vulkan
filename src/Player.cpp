@@ -12,6 +12,7 @@
 #include "GameManager.hpp"
 #include "Gui.hpp"
 #include "ItemManager.hpp"
+#include "PlayerBombTables.hpp"
 #include "Rng.hpp"
 #include "ScreenEffect.hpp"
 #include "SoundPlayer.hpp"
@@ -23,6 +24,19 @@
 namespace th07
 {
 DIFFABLE_STATIC(Player, g_Player);
+
+namespace {
+
+void ApplyTh07InitialPlayerModeOwnerState(Player *p)
+{
+    const PlayerInitialModeOwnerState state = BuildPlayerInitialModeOwnerState();
+    p->Th07ModeState() = state.modeState;
+    p->Th07OptionState() = state.optionState;
+    p->Th07FocusHeld() = state.focusHeld;
+    p->Th07ModeTransitionRequest() = state.transitionRequest;
+}
+
+} // namespace
 
 DIFFABLE_STATIC_ARRAY_ASSIGN(CharacterData, 4, g_CharData) = {
     /* ReimuA  */ {4.0, 2.0, 4.0, 2.0, Player::FireBulletReimuA, Player::FireBulletReimuA},
@@ -144,6 +158,7 @@ ZunResult Player::AddedCallback(Player *p)
     }
     p->verticalMovementSpeedMultiplierDuringBomb = 1.0;
     p->horizontalMovementSpeedMultiplierDuringBomb = 1.0;
+    ApplyTh07InitialPlayerModeOwnerState(p);
     p->respawnTimer = 8;
     return ZUN_SUCCESS;
 }
