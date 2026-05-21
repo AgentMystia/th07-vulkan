@@ -5,7 +5,7 @@
 
 namespace th07 {
 
-enum class Difficulty : std::uint8_t {
+enum class Th07Difficulty : std::uint8_t {
     Easy = 0,
     Normal = 1,
     Hard = 2,
@@ -14,13 +14,13 @@ enum class Difficulty : std::uint8_t {
     Phantasm = 5,
 };
 
-enum class Character : std::uint8_t {
+enum class Th07PlayableCharacter : std::uint8_t {
     Reimu = 0,
     Marisa = 1,
     Sakuya = 2,
 };
 
-enum class ShotType : std::uint8_t {
+enum class Th07ShotType : std::uint8_t {
     ReimuA = 0,
     ReimuB = 1,
     MarisaA = 2,

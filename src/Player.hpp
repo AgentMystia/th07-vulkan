@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cmath>
+#include <cstddef>
 #include <d3dx8math.h>
 
 #include "AnmManager.hpp"
@@ -8,6 +9,7 @@
 #include "BulletManager.hpp"
 #include "Chain.hpp"
 #include "GameManager.hpp"
+#include "PlayerLayout.hpp"
 #include "ZunBool.hpp"
 #include "ZunResult.hpp"
 #include "inttypes.hpp"
@@ -166,6 +168,30 @@ struct CharacterPowerData
 };
 ZUN_ASSERT_SIZE(CharacterPowerData, 0xc);
 
+struct Th07PlayerOriginalAnmVmSlot : AnmVm {
+    u8 th07PendingAnmVmFields_110_1b8[kTh07AnmVmColorOffset - sizeof(AnmVm)];
+    D3DCOLOR originalColor;
+    D3DCOLOR originalAlternateColor;
+    u32 originalRenderFlags;
+    u8 th07PendingAnmVmFields_1c4_1c6[kTh07AnmVmPendingInterruptOffset - 0x1c4];
+    i16 originalPendingInterrupt;
+    D3DXVECTOR3 originalDrawPosition;
+    i16 originalActiveSpriteIndex;
+    i16 originalBaseSpriteIndex;
+    i16 originalScriptIndex;
+    AnmRawInstr *originalBeginningOfScript;
+    AnmRawInstr *originalCurrentInstruction;
+    AnmLoadedSprite *originalLoadedSprite;
+    u8 th07PendingAnmVmFields_1e8_230[kTh07AnmVmAuxVectorOffset - 0x1e8];
+    D3DXVECTOR3 originalVector230;
+    i32 originalLastSpriteSetFrame;
+    u8 originalByte240;
+    u8 originalByte241;
+    u8 th07PendingAnmVmFields_242_24c[kPlayerAnmVmSlotSize - 0x242];
+};
+ZUN_ASSERT_SIZE(Th07PlayerOriginalAnmVmSlot, kPlayerAnmVmSlotSize);
+static_assert(sizeof(AnmVm) == 0x0110);
+
 struct Player
 {
     Player();
@@ -206,23 +232,28 @@ struct Player
     void ScoreGraze(D3DXVECTOR3 *center);
     void Die();
 
-    AnmVm playerSprite;
-    AnmVm orbsSprite[3];
+    Th07PlayerOriginalAnmVmSlot playerSprite;
+    Th07PlayerOriginalAnmVmSlot orbsSprite[3];
     D3DXVECTOR3 positionCenter;
-    D3DXVECTOR3 unk_44c;
+    D3DXVECTOR3 th07PendingVector93c;
     D3DXVECTOR3 hitboxTopLeft;
     D3DXVECTOR3 hitboxBottomRight;
+    D3DXVECTOR3 grazeTopLeft;
+    D3DXVECTOR3 grazeBottomRight;
     D3DXVECTOR3 grabItemTopLeft;
     D3DXVECTOR3 grabItemBottomRight;
     D3DXVECTOR3 hitboxSize;
+    D3DXVECTOR3 grazeSize;
     D3DXVECTOR3 grabItemSize;
     D3DXVECTOR3 orbsPosition[2];
+    D3DXVECTOR2 movementDelta;
     D3DXVECTOR3 bombRegionPositions[32];
     D3DXVECTOR3 bombRegionSizes[32];
     i32 bombRegionDamages[32];
     i32 unk_838[32];
     PlayerRect bombProjectiles[16];
     ZunTimer laserTimer[2];
+    u8 th07PendingPlayerFields_eec_23f0[0x23f0 - 0x0eec];
     f32 horizontalMovementSpeedMultiplierDuringBomb;
     f32 verticalMovementSpeedMultiplierDuringBomb;
     i32 respawnTimer;
@@ -256,7 +287,28 @@ struct Player
         sprite->pos[2] = 0.0;
     };
 };
-ZUN_ASSERT_SIZE(Player, 0x98f0);
+static_assert(offsetof(Player, playerSprite) == kPlayerPrimaryAnmVmOffset);
+static_assert(offsetof(Player, orbsSprite[0]) == kPlayerLeftOptionAnmVmOffset);
+static_assert(offsetof(Player, orbsSprite[1]) == kPlayerRightOptionAnmVmOffset);
+static_assert(offsetof(Player, orbsSprite[2]) == kPlayerFourthAnmVmOffset);
+static_assert(offsetof(Player, positionCenter) == kPlayerPositionOffset);
+static_assert(offsetof(Player, th07PendingVector93c) == kPlayerPendingVector93cOffset);
+static_assert(offsetof(Player, hitboxTopLeft) == kPlayerHitboxMinOffset);
+static_assert(offsetof(Player, hitboxBottomRight) == kPlayerHitboxMaxOffset);
+static_assert(offsetof(Player, grazeTopLeft) == kPlayerGrazeBoxMinOffset);
+static_assert(offsetof(Player, grazeBottomRight) == kPlayerGrazeBoxMaxOffset);
+static_assert(offsetof(Player, grabItemTopLeft) == kPlayerGrabItemBoxMinOffset);
+static_assert(offsetof(Player, grabItemBottomRight) == kPlayerGrabItemBoxMaxOffset);
+static_assert(offsetof(Player, hitboxSize) == kPlayerHitboxSizeOffset);
+static_assert(offsetof(Player, grazeSize) == kPlayerGrazeBoxSizeOffset);
+static_assert(offsetof(Player, grabItemSize) == kPlayerGrabItemSizeOffset);
+static_assert(offsetof(Player, orbsPosition[0]) == kPlayerLeftOptionPositionOffset);
+static_assert(offsetof(Player, orbsPosition[1]) == kPlayerRightOptionPositionOffset);
+static_assert(offsetof(Player, movementDelta) == kPlayerMovementDeltaOffset);
+static_assert(offsetof(Player, horizontalMovementSpeedMultiplierDuringBomb) ==
+              kPlayerBombHorizontalSpeedMultiplierOffset);
+static_assert(offsetof(Player, verticalMovementSpeedMultiplierDuringBomb) ==
+              kPlayerBombVerticalSpeedMultiplierOffset);
 
 DIFFABLE_EXTERN(Player, g_Player);
 }; // namespace th07

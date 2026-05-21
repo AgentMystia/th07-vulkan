@@ -47,18 +47,18 @@ const std::array<StageResourceSet, 8> kTh07StageResources = {{
 }};
 
 const std::array<ShtFileBinding, 12> kTh07ShtFiles = {{
-    {ShotType::ReimuA, false, {"data/ply00a.sht", "00496bb4"}},
-    {ShotType::ReimuB, false, {"data/ply00b.sht", "00496ba4"}},
-    {ShotType::MarisaA, false, {"data/ply01a.sht", "00496b94"}},
-    {ShotType::MarisaB, false, {"data/ply01b.sht", "00496b84"}},
-    {ShotType::SakuyaA, false, {"data/ply02a.sht", "00496b74"}},
-    {ShotType::SakuyaB, false, {"data/ply02b.sht", "00496b64"}},
-    {ShotType::ReimuA, true, {"data/ply00as.sht", "00496b50"}},
-    {ShotType::ReimuB, true, {"data/ply00bs.sht", "00496b3c"}},
-    {ShotType::MarisaA, true, {"data/ply01as.sht", "00496b28"}},
-    {ShotType::MarisaB, true, {"data/ply01bs.sht", "00496b14"}},
-    {ShotType::SakuyaA, true, {"data/ply02as.sht", "00496b00"}},
-    {ShotType::SakuyaB, true, {"data/ply02bs.sht", "00496aec"}},
+    {Th07ShotType::ReimuA, false, {"data/ply00a.sht", "00496bb4"}},
+    {Th07ShotType::ReimuB, false, {"data/ply00b.sht", "00496ba4"}},
+    {Th07ShotType::MarisaA, false, {"data/ply01a.sht", "00496b94"}},
+    {Th07ShotType::MarisaB, false, {"data/ply01b.sht", "00496b84"}},
+    {Th07ShotType::SakuyaA, false, {"data/ply02a.sht", "00496b74"}},
+    {Th07ShotType::SakuyaB, false, {"data/ply02b.sht", "00496b64"}},
+    {Th07ShotType::ReimuA, true, {"data/ply00as.sht", "00496b50"}},
+    {Th07ShotType::ReimuB, true, {"data/ply00bs.sht", "00496b3c"}},
+    {Th07ShotType::MarisaA, true, {"data/ply01as.sht", "00496b28"}},
+    {Th07ShotType::MarisaB, true, {"data/ply01bs.sht", "00496b14"}},
+    {Th07ShotType::SakuyaA, true, {"data/ply02as.sht", "00496b00"}},
+    {Th07ShotType::SakuyaB, true, {"data/ply02bs.sht", "00496aec"}},
 }};
 
 const StageResourceSet* FindStageResources(int stageNumber)
@@ -71,7 +71,7 @@ const StageResourceSet* FindStageResources(int stageNumber)
     return nullptr;
 }
 
-const ShtFileBinding* FindShtFile(ShotType shotType, bool focused)
+const ShtFileBinding* FindShtFile(Th07ShotType shotType, bool focused)
 {
     for (const ShtFileBinding& binding : kTh07ShtFiles) {
         if (binding.shotType == shotType && binding.focused == focused) {

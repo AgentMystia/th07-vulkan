@@ -115,6 +115,7 @@ ZunResult Player::AddedCallback(Player *p)
     p->hitboxSize.x = 1.25;
     p->hitboxSize.y = 1.25;
     p->hitboxSize.z = 5.0;
+    p->grazeSize = p->hitboxSize;
     p->grabItemSize.x = 12.0;
     p->grabItemSize.y = 12.0;
     p->grabItemSize.z = 5.0;
@@ -802,11 +803,12 @@ ZunResult Player::HandlePlayerInputs()
     this->previousHorizontalSpeed = horizontalSpeed;
     this->previousVerticalSpeed = verticalSpeed;
 
-    // TODO: Match stack variables here
-    this->positionCenter[0] +=
+    this->movementDelta.x =
         horizontalSpeed * this->horizontalMovementSpeedMultiplierDuringBomb * g_Supervisor.effectiveFramerateMultiplier;
-    this->positionCenter[1] +=
+    this->movementDelta.y =
         verticalSpeed * this->verticalMovementSpeedMultiplierDuringBomb * g_Supervisor.effectiveFramerateMultiplier;
+    this->positionCenter[0] += this->movementDelta.x;
+    this->positionCenter[1] += this->movementDelta.y;
 
     if (this->positionCenter.x < g_GameManager.playerMovementAreaTopLeftPos.x)
     {
@@ -831,6 +833,10 @@ ZunResult Player::HandlePlayerInputs()
     this->hitboxTopLeft = this->positionCenter - this->hitboxSize;
 
     this->hitboxBottomRight = this->positionCenter + this->hitboxSize;
+
+    this->grazeTopLeft = this->positionCenter - this->grazeSize;
+
+    this->grazeBottomRight = this->positionCenter + this->grazeSize;
 
     this->grabItemTopLeft = this->positionCenter - this->grabItemSize;
 
