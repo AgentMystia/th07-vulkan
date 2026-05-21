@@ -85,6 +85,18 @@ Use these status labels when tracking restoration state:
 - `blocked`: evidence, ownership, lifetime, dispatch, or validation is missing and must be resolved before safe wiring.
 - `obsolete-th06-carryover`: copied TH06 behavior or shape that is known not to be authoritative for TH07 and should be replaced.
 
+## Goal Alignment Gate
+
+Before starting a new long-running or unattended goal, review the active goal against this file and the current project status. Confirm that the goal:
+
+- preserves TH07 evidence authority and the flat `src/` layout
+- treats SDL3/Vulkan only as backend boundaries
+- uses dependency-ordered reconstruction instead of single-module polishing
+- keeps tracking in existing docs/audits/config manifests
+- does not require guessing, premature runtime wiring, or committing ignored reference data
+
+If the active goal and this file conflict, update `AGENTS.md` first, validate that change, and only then begin formal reconstruction work.
+
 ## Work Process
 
 For flat `src/` structure and style maintenance:
@@ -124,6 +136,8 @@ After editing:
 - Do not mark a module complete just because tests pass; tests are only evidence for the cases they actually cover.
 - Before stopping for a handoff, leave a concise checkpoint with modified scope, validation run, known gaps, and the next evidence-backed step.
 - Do not commit or discard work unless the user explicitly asks or the active long-running goal explicitly requests validated checkpoint commits. In unattended restoration loops, commit each validated slice with an evidence-focused message, and push/update a PR only when credentials and tools work non-interactively.
+- After each validated commit or marked blocker, update the relevant existing tracker or compact manifest with restored items, evidence used, validation status, transitional items, blockers, and the next best dependency slice.
+- Limit broad inventory/audit passes to one per unattended run unless another pass directly unlocks the active implementation slice.
 
 ## Validation
 
