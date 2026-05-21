@@ -27,6 +27,17 @@ int main()
     static_assert(th07::kPlayerOptionInterpolationPreviousFrameOffset == 0x2410);
     static_assert(th07::kPlayerOptionInterpolationSubframeOffset == 0x2414);
     static_assert(th07::kPlayerOptionInterpolationFrameOffset == 0x2418);
+    static_assert(th07::kPlayerBombCommonEffectXOffset == 0x16a00);
+    static_assert(th07::kPlayerBombCommonEffectYOffset == 0x16a04);
+    static_assert(th07::kPlayerBombCommonEffectDurationOffset == 0x16a08);
+    static_assert(th07::kPlayerMode4EffectStartXOffset == 0x16a0c);
+    static_assert(th07::kPlayerMode4EffectStartYOffset == 0x16a10);
+    static_assert(th07::kPlayerMode4EffectStartDurationOffset == 0x16a14);
+    static_assert(th07::kPlayerBombCommonEffectActivePointerOffset == 0x0b7e68);
+    static_assert(th07::kPlayerModeTransitionEffectActivePointerOffset == 0x0b7e6c);
+    static_assert(th07::kPlayerBombCommonEffectDurationGlobalAddress == 0x004d44e0);
+    static_assert(th07::kPlayerModeTransitionEffectActivePointerOffset + 0x0c ==
+                  th07::kPlayerObjectClearSize);
     static_assert(th07::kPlayerOptionStateHidden == 0);
     static_assert(th07::kPlayerOptionStateUnfocused == 1);
     static_assert(th07::kPlayerOptionStateFocusing == 2);

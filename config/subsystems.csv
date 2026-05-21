@@ -1,13 +1,27 @@
-subsystem,status,evidence,notes
-RNG,Pending,reference/ghidra,Replace TH06 behavior only after TH07 function mapping.
-Timer,Pending,reference/ghidra,Verify frame-step and pause interactions.
-FileSystem,Pending,reference/original/th07.dat,Modern loader must preserve original archive lookup behavior.
-ANM,Changed,reference/extracted/*.anm,Parser family shared with TH06; TH07 resource slots differ.
-STD,Same,reference/std,Verify all stage1-8 dumps.
-MSG,Same,reference/msg,Verify TH07 msg06-compatible parser behavior.
-ECL,Changed,reference/ecl,Opcode table requires TH07 audit.
-SHT,New,reference/extracted/*.sht,TH07 uses 12 shot-data files for focused/unfocused variants.
-Player,Changed,reference/ghidra,Add Sakuya and TH07 shot/bomb behavior.
-CherryBorder,New,reference/ghidra,Implement Cherry Cherry+ and Supernatural Border.
-Render,Modernized,src/app,SDL3/Vulkan backend must preserve gameplay timing.
-Audio,Modernized,src/app,miniaudio-compatible backend planned.
+subsystem,restoration_status,dependency_phase,evidence,source_surface,tracker,next_slice,blocker
+ReferencePaths,exact,data-format,reference/original;reference/extracted;reference/ghidra,src/ReferencePaths.*,docs/PROJECT_STRUCTURE.md,Keep local evidence paths out of tracked assets,none
+ResourceManifest,source-derived,data-format,reference/ghidra/strings.tsv;reference/original/th07.exe,src/Th07ResourceManifest.*;src/ShtManager.*,docs/TH07_RECONSTRUCTION_STATUS.md,Extend manifest checks only when new original route tables are mapped,none
+SHT,source-derived,data-format,reference/extracted/ply*.sht;reference/ghidra/decomp/functions/00442b70_FUN_00442b70.c,src/ShtFile.*;tests/test_sht_parser.cpp,docs/TH07_CPP_RECONSTRUCTION.md,Wire Player shot callbacks after Player owner layout is safe,Player runtime still transitional
+PlayerLayout,source-derived,object-layout,reference/ghidra/decomp/functions/004423e0_FUN_004423e0.c;0043ee50;0043e260;0043e3b0;0043e4e0;0043e6b0,src/PlayerLayout.hpp;src/Player.hpp;tests/test_player_layout.cpp,docs/TH07_RECONSTRUCTION_STATUS.md,Keep layout expansion limited to newly proven owner fields as runtime producers are restored,none
+PlayerRuntime,transitional,gameplay-runtime,reference/ghidra/decomp/functions/004423e0_FUN_004423e0.c;00441330;00441670;00441960;00441bd0;004420b0,src/Player.cpp;src/Player.hpp;src/PlayerBombTables.*,docs/TH07_CPP_RECONSTRUCTION.md,Wire mapped mode-4 and mode-3 producers after effect lifetime contract is proven,TH06-shaped runtime remains
+BombRuntime,metadata-only,gameplay-runtime,reference/ghidra/decomp/functions/004083f0_FUN_004083f0.c;004084f0;00408610;00408710..0040e280,src/BombData.*;src/PlayerBombTables.*,docs/TH07_RECONSTRUCTION_STATUS.md,Wire bomb producers after active effect lifetime and dispatch ordering are proven,Producer runtime still metadata-only
+StageObject,source-derived,manager-layout,reference/ghidra/decomp/functions/004074c0_FUN_004074c0.c;00407000;00405690;004082b0,src/Stage.*;src/Th07EffectTables.*,docs/TH07_CPP_RECONSTRUCTION.md,Continue only with function-level Stage gaps that unlock Effect or ANM consumers,none
+StageAnmVm,source-derived,interpreter-runtime,reference/ghidra/decomp/functions/00450d60_FUN_00450d60.c;00450a50;00450b20;00450c10;00450ca0,src/Stage.*;src/Th07EffectTables.*,docs/TH07_CPP_RECONSTRUCTION.md,Resolve exact x87 and batch-buffer edge gaps when needed by runtime parity,x87 and original batch flushing pending
+EffectTables,source-derived,data-table,reference/ghidra/decomp/functions/0041c610_FUN_0041c610.c;reference/original/th07.exe,src/Th07EffectTables.*;src/EffectManager.*,docs/TH07_RECONSTRUCTION_STATUS.md,Fill remaining callback bodies by dependency on proven manager owner layout,Some callback bodies pending
+EffectRuntime,transitional,gameplay-runtime,reference/ghidra/decomp/functions/0041a370_FUN_0041a370.c;0041a5a0;0041a750;0041aef0;0041b0b0;0041b4a0;0041b770;0041b9f0;0041bc20;0041c100,src/EffectManager.*;src/Th07EffectTables.*,docs/TH07_CPP_RECONSTRUCTION.md,Map conditional RGB-white gate score and cherry globals before wiring that branch,Conditional gate owner globals pending
+AnmManager,transitional,manager-runtime,reference/ghidra/decomp/functions/0044efb0_FUN_0044efb0.c;0044f9a0;00450130;004504b0,src/AnmManager.*;src/AnmVm.hpp,docs/MODULES.md,Decide and prove original batch-buffer flushing boundary,FUN_0044f690 and FUN_0044f5c0 pending
+ScreenEffect,source-derived,pure-helper,reference/ghidra/decomp/functions/0044b0e0_FUN_0044b0e0.c,src/ScreenEffect.cpp;src/Th07EffectTables.*,docs/TH07_CPP_RECONSTRUCTION.md,Keep frame-counter gate tied to proven GameManager offset,none
+ECL,pending,interpreter-runtime,reference/ecl;reference/ghidra/decomp,src/EclManager.*;src/EnemyEclInstr.*,docs/TH07_DIFF_FROM_TH06.md,Audit TH07 opcode table and replace TH06 opcode assumptions,Opcode table not mapped
+BulletLaser,pending,gameplay-runtime,reference/ghidra/decomp;reference/extracted/etama*.anm,src/BulletManager.*;src/BulletData.*,docs/TH07_RECONSTRUCTION_STATUS.md,Map bullet and laser tables before runtime replacement,Executable-backed tables missing
+EnemyBoss,transitional,gameplay-runtime,reference/ghidra/decomp;reference/ecl,src/EnemyManager.*;src/Enemy.hpp,docs/TH07_DIFF_FROM_TH06.md,Map boss lifecycle and spell handling after ECL contracts,Depends on ECL and BulletLaser
+ItemManager,transitional,gameplay-runtime,reference/ghidra/decomp;reference/ecl,src/ItemManager.*;src/CherrySystem.*;src/BorderSystem.*,docs/TH07_RECONSTRUCTION_STATUS.md,Source Cherry and Border state transitions before item runtime wiring,State transition evidence pending
+CherryBorder,metadata-only,gameplay-state,reference/ghidra/decomp/functions/00427f22_FUN_00427f22.c,src/CherrySystem.*;src/BorderSystem.*,docs/TH07_RECONSTRUCTION_STATUS.md,Map start break end and scoring transitions from Ghidra,Only HUD and label anchors are present
+GameManager,transitional,object-layout,reference/ghidra/decomp;reference/original/th07.exe,src/GameManager.*;src/Th07Constants.*,docs/TH07_RECONSTRUCTION_STATUS.md,Map full TH07 field layout after high-value global consumers are known,Layout assert disabled and most fields pending
+ResultScreen,pending,gameplay-runtime,reference/ghidra/decomp;reference/original,src/ResultScreen.*;src/ClearBonusSystem.*,docs/TH07_RECONSTRUCTION_STATUS.md,Map score-file and result structure after GameManager layout,Structure still TH06-derived
+RNG,pending,pure-helper,reference/ghidra/decomp,src/Rng.*,docs/MODULES.md,Map TH07 RNG function and replay consumers before replacement,Function mapping pending
+Timer,pending,pure-helper,reference/ghidra/decomp,src/ZunTimer.*,docs/MODULES.md,Verify frame-step and pause interactions against TH07 callers,Caller audit pending
+FileSystem,transitional,data-format,reference/original/th07.dat;reference/original/thbgm.dat,src/FileSystem.*;src/pbg3,docs/PROJECT_STRUCTURE.md,Verify original archive lookup and failure behavior before gameplay reliance,Exact lookup semantics pending
+GUI,transitional,ui-runtime,reference/ghidra/decomp/functions/00428b19_FUN_00428b19.c,src/Gui.*;src/AsciiManager.*,docs/TH07_RECONSTRUCTION_STATUS.md,Map remaining HUD state once Cherry Border and score globals are proven,Depends on GameManager and CherryBorder
+ReplayInput,pending,platform-boundary,reference/ghidra/decomp;reference/original,src/ReplayManager.*;src/Controller.*;src/Supervisor.*,docs/TH07_RECONSTRUCTION_STATUS.md,Audit deterministic input sampling and replay state after gameplay owners stabilize,Not audited
+Audio,transitional,platform-boundary,reference/original/thbgm.fmt;reference/original/thbgm.dat,src/SoundPlayer.*;src/MidiOutput.*;src/zwave.*,docs/TH07_DIFF_FROM_TH06.md,Preserve original loop metadata at backend boundary,Runtime parity pending
+SDL3VulkanShell,transitional,platform-boundary,src/Th07App.cpp;CMakeLists.txt,src/Th07App.cpp;src/main.cpp,docs/PROJECT_STRUCTURE.md,Keep backend separate from deterministic gameplay authority,Modern shell is not gameplay evidence

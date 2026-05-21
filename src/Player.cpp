@@ -34,6 +34,9 @@ void ApplyTh07InitialPlayerModeOwnerState(Player *p)
     p->Th07OptionState() = state.optionState;
     p->Th07FocusHeld() = state.focusHeld;
     p->Th07ModeTransitionRequest() = state.transitionRequest;
+    p->Th07BombCommonEffectXBits() = state.commonEffectXBits;
+    p->Th07BombCommonEffectYBits() = state.commonEffectYBits;
+    p->Th07BombCommonEffectDuration() = state.commonEffectDurationFrames;
 }
 
 } // namespace

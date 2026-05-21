@@ -28,19 +28,6 @@ inline constexpr std::uint32_t kPlayerBombScoreDrainStepOffset = 0x16a2c;
 inline constexpr std::uint32_t kPlayerBombLastProcessedFrameOffset = 0x16a30;
 inline constexpr std::uint32_t kPlayerBombTimerSubframeOffset = 0x16a34;
 inline constexpr std::uint32_t kPlayerBombTimerFrameOffset = 0x16a38;
-inline constexpr std::uint32_t kPlayerBombCommonEffectXOffset = 0x16a00;
-inline constexpr std::uint32_t kPlayerBombCommonEffectYOffset = 0x16a04;
-inline constexpr std::uint32_t kPlayerBombCommonEffectDurationOffset = 0x16a08;
-inline constexpr std::uint32_t kPlayerMode4EffectStartXOffset = 0x16a0c;
-inline constexpr std::uint32_t kPlayerMode4EffectStartYOffset = 0x16a10;
-inline constexpr std::uint32_t kPlayerMode4EffectStartDurationOffset = 0x16a14;
-inline constexpr std::uint32_t kPlayerBombCommonEffectXGlobalAddress =
-    kPlayerObjectAddress + kPlayerBombCommonEffectXOffset;
-inline constexpr std::uint32_t kPlayerBombCommonEffectYGlobalAddress =
-    kPlayerObjectAddress + kPlayerBombCommonEffectYOffset;
-inline constexpr std::uint32_t kPlayerBombCommonEffectDurationGlobalAddress =
-    kPlayerObjectAddress + kPlayerBombCommonEffectDurationOffset;
-inline constexpr std::uint32_t kPlayerBombCommonEffectActivePointerOffset = 0x0b7e68;
 inline constexpr std::int32_t kPlayerBombStartupFallbackDurationFrames = 999;
 inline constexpr std::int32_t kPlayerBombPowerBonusOnStart = 6;
 inline constexpr std::uint32_t kPlayerBombDefaultSpeedMultiplierBits = 0x3f800000;
@@ -103,10 +90,6 @@ inline constexpr std::uint32_t kPlayerMode4EffectInitialScaleBits = 0x3f800000;
 inline constexpr std::uint32_t kPlayerMode4EffectFinalScaleBits = 0x3e800000;
 inline constexpr std::uint32_t kPlayerMode3EffectInitialScaleBits = 0x3d800000;
 inline constexpr std::uint32_t kPlayerMode3EffectFinalScaleBits = 0x3fa66666;
-static_assert(kPlayerBombCommonEffectXGlobalAddress == 0x004d44d8);
-static_assert(kPlayerBombCommonEffectYGlobalAddress == 0x004d44dc);
-static_assert(kPlayerBombCommonEffectDurationGlobalAddress == 0x004d44e0);
-
 struct PlayerBombCommonEffectConfig {
     std::int32_t effectId;
     std::int32_t spawnSlotArgument;

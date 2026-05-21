@@ -94,8 +94,22 @@ Before starting a new long-running or unattended goal, review the active goal ag
 - uses dependency-ordered reconstruction instead of single-module polishing
 - keeps tracking in existing docs/audits/config manifests
 - does not require guessing, premature runtime wiring, or committing ignored reference data
+- can run unattended without waiting for interactive approvals, escalated filesystem permissions, or network publishing credentials
 
 If the active goal and this file conflict, update `AGENTS.md` first, validate that change, and only then begin formal reconstruction work.
+
+## Unattended Mode
+
+Unattended reconstruction work must not depend on interactive authorization. During unattended runs:
+
+- Do not run `git add`, `git commit`, `git push`, PR creation/update, branch rewrites, rebases, destructive git commands, or network publishing commands unless the user has explicitly pre-approved the exact required command class for the session and the command works non-interactively.
+- Do not start commands that are expected to require escalated filesystem permissions, credential prompts, browser/GUI authorization, or network access approvals.
+- Prefer normal workspace edits, local source inspection, local tests, local audits, and tracker/doc updates that can run without approval.
+- Leave validated work as an uncommitted checkpoint when committing or publishing would require approval.
+- Record checkpoint state in existing trackers/docs or the final handoff: changed files, evidence used, validations run, known gaps, blockers, and the next dependency slice.
+- Stop before any required escalation instead of waiting for authorization.
+
+When the user returns, they can review, commit, push, or approve publishing. If the user explicitly asks for a non-unattended publish/checkpoint turn, normal repository commit and PR workflows may be used.
 
 ## Work Process
 
@@ -135,8 +149,8 @@ After editing:
 - State whether behavior is exact, source-derived, or still a placeholder.
 - Do not mark a module complete just because tests pass; tests are only evidence for the cases they actually cover.
 - Before stopping for a handoff, leave a concise checkpoint with modified scope, validation run, known gaps, and the next evidence-backed step.
-- Do not commit or discard work unless the user explicitly asks or the active long-running goal explicitly requests validated checkpoint commits. In unattended restoration loops, commit each validated slice with an evidence-focused message, and push/update a PR only when credentials and tools work non-interactively.
-- After each validated commit or marked blocker, update the relevant existing tracker or compact manifest with restored items, evidence used, validation status, transitional items, blockers, and the next best dependency slice.
+- Do not commit or discard work unless the user explicitly asks. In unattended restoration loops, do not commit or push by default; leave validated work as an uncommitted checkpoint unless the user pre-approved the needed git operations before the run.
+- After each validated checkpoint or marked blocker, update the relevant existing tracker or compact manifest with restored items, evidence used, validation status, transitional items, blockers, and the next best dependency slice.
 - Limit broad inventory/audit passes to one per unattended run unless another pass directly unlocks the active implementation slice.
 
 ## Validation

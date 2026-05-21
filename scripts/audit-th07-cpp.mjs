@@ -67,6 +67,12 @@ mustContain(playerH, 'offsetof(Player, positionCenter) == kPlayerPositionOffset'
   'TH07 Player position offset assert missing');
 mustContain(playerH, 'offsetof(Player, movementDelta) == kPlayerMovementDeltaOffset',
   'TH07 Player movement delta offset assert missing');
+mustContain(playerH, 'offsetof(Player, th07BombCommonEffectXBits) == kPlayerBombCommonEffectXOffset',
+  'TH07 Player common-effect X tail offset assert missing');
+mustContain(playerH, 'offsetof(Player, th07BombCommonEffectActivePointer)',
+  'TH07 Player common-effect active pointer tail offset assert missing');
+mustContain(playerH, 'ZUN_ASSERT_SIZE(Player, kPlayerObjectClearSize)',
+  'TH07 Player clear-span size assert missing');
 
 const manifest = read('Th07ResourceManifest.cpp');
 mustEqual(countMatches(manifest, /(?:ResourceStringAnchor)?\{"data\/ecldata\d\.ecl"/g), 8, 'ECL manifest entry count');
@@ -403,6 +409,9 @@ for (const value of [
   'Th07OptionState()',
   'Th07FocusHeld()',
   'Th07ModeTransitionRequest()',
+  'Th07BombCommonEffectXBits()',
+  'Th07BombCommonEffectYBits()',
+  'Th07BombCommonEffectDuration()',
   'ApplyTh07InitialPlayerModeOwnerState',
   'BuildPlayerInitialModeOwnerState()',
 ]) {

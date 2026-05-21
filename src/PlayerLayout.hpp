@@ -61,7 +61,21 @@ inline constexpr std::uint32_t kPlayerModeTransitionRequestOffset = 0x240d;
 inline constexpr std::uint32_t kPlayerOptionInterpolationPreviousFrameOffset = 0x2410;
 inline constexpr std::uint32_t kPlayerOptionInterpolationSubframeOffset = 0x2414;
 inline constexpr std::uint32_t kPlayerOptionInterpolationFrameOffset = 0x2418;
+inline constexpr std::uint32_t kPlayerBombCommonEffectXOffset = 0x16a00;
+inline constexpr std::uint32_t kPlayerBombCommonEffectYOffset = 0x16a04;
+inline constexpr std::uint32_t kPlayerBombCommonEffectDurationOffset = 0x16a08;
+inline constexpr std::uint32_t kPlayerMode4EffectStartXOffset = 0x16a0c;
+inline constexpr std::uint32_t kPlayerMode4EffectStartYOffset = 0x16a10;
+inline constexpr std::uint32_t kPlayerMode4EffectStartDurationOffset = 0x16a14;
+inline constexpr std::uint32_t kPlayerBombCommonEffectActivePointerOffset = 0x0b7e68;
 inline constexpr std::uint32_t kPlayerModeTransitionEffectActivePointerOffset = 0x0b7e6c;
+inline constexpr std::uint32_t kPlayerBombCommonEffectXGlobalAddress =
+    kPlayerObjectAddress + kPlayerBombCommonEffectXOffset;
+inline constexpr std::uint32_t kPlayerBombCommonEffectYGlobalAddress =
+    kPlayerObjectAddress + kPlayerBombCommonEffectYOffset;
+inline constexpr std::uint32_t kPlayerBombCommonEffectDurationGlobalAddress =
+    kPlayerObjectAddress + kPlayerBombCommonEffectDurationOffset;
+inline constexpr std::uint32_t kPlayerLegacyBridgeEndOffset = 0x0b310;
 inline constexpr std::uint32_t kPlayerPrimaryAnmScript = 0x0400;
 inline constexpr std::uint32_t kPlayerLeftOptionAnmScript = 0x0480;
 inline constexpr std::uint32_t kPlayerRightOptionAnmScript = 0x0481;
@@ -111,6 +125,17 @@ static_assert(kPlayerFocusHeldOffset == kPlayerOptionStateOffset + 1);
 static_assert(kPlayerOptionInterpolationSubframeOffset ==
               kPlayerOptionInterpolationPreviousFrameOffset + 4);
 static_assert(kPlayerOptionInterpolationFrameOffset == kPlayerOptionInterpolationSubframeOffset + 4);
+static_assert(kPlayerBombCommonEffectYOffset == kPlayerBombCommonEffectXOffset + 4);
+static_assert(kPlayerBombCommonEffectDurationOffset == kPlayerBombCommonEffectYOffset + 4);
+static_assert(kPlayerMode4EffectStartXOffset == kPlayerBombCommonEffectDurationOffset + 4);
+static_assert(kPlayerMode4EffectStartYOffset == kPlayerMode4EffectStartXOffset + 4);
+static_assert(kPlayerMode4EffectStartDurationOffset == kPlayerMode4EffectStartYOffset + 4);
+static_assert(kPlayerBombCommonEffectActivePointerOffset + 4 ==
+              kPlayerModeTransitionEffectActivePointerOffset);
+static_assert(kPlayerModeTransitionEffectActivePointerOffset + 0x0c == kPlayerObjectClearSize);
+static_assert(kPlayerBombCommonEffectXGlobalAddress == 0x004d44d8);
+static_assert(kPlayerBombCommonEffectYGlobalAddress == 0x004d44dc);
+static_assert(kPlayerBombCommonEffectDurationGlobalAddress == 0x004d44e0);
 static_assert(kPlayerOptionStateFocused == 3);
 
 } // namespace th07

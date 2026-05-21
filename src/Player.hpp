@@ -241,6 +241,21 @@ struct Player
         return *reinterpret_cast<u8 *>(reinterpret_cast<u8 *>(this) + kPlayerModeTransitionRequestOffset);
     }
 
+    u32 &Th07BombCommonEffectXBits()
+    {
+        return th07BombCommonEffectXBits;
+    }
+
+    u32 &Th07BombCommonEffectYBits()
+    {
+        return th07BombCommonEffectYBits;
+    }
+
+    i32 &Th07BombCommonEffectDuration()
+    {
+        return th07BombCommonEffectDuration;
+    }
+
     f32 AngleFromPlayer(D3DXVECTOR3 *pos);
     f32 AngleToPlayer(D3DXVECTOR3 *pos);
     i32 CheckGraze(D3DXVECTOR3 *center, D3DXVECTOR3 *size);
@@ -299,6 +314,19 @@ struct Player
     ChainElem *chainCalc;
     ChainElem *chainDraw1;
     ChainElem *chainDraw2;
+    u8 th07PendingPlayerFields_b310_16a00[kPlayerBombCommonEffectXOffset - kPlayerLegacyBridgeEndOffset];
+    u32 th07BombCommonEffectXBits;
+    u32 th07BombCommonEffectYBits;
+    i32 th07BombCommonEffectDuration;
+    u32 th07Mode4EffectStartXBits;
+    u32 th07Mode4EffectStartYBits;
+    i32 th07Mode4EffectStartDuration;
+    u8 th07PendingPlayerFields_16a18_b7e68[kPlayerBombCommonEffectActivePointerOffset -
+                                           (kPlayerMode4EffectStartDurationOffset + 4)];
+    u32 th07BombCommonEffectActivePointer;
+    u32 th07ModeTransitionEffectActivePointer;
+    u8 th07PendingPlayerFields_b7e70_b7e78[kPlayerObjectClearSize -
+                                           (kPlayerModeTransitionEffectActivePointerOffset + 4)];
 #pragma var_order(x, y)
     void inline SetToTopLeftPos(AnmVm *sprite)
     {
@@ -329,6 +357,18 @@ static_assert(offsetof(Player, horizontalMovementSpeedMultiplierDuringBomb) ==
               kPlayerBombHorizontalSpeedMultiplierOffset);
 static_assert(offsetof(Player, verticalMovementSpeedMultiplierDuringBomb) ==
               kPlayerBombVerticalSpeedMultiplierOffset);
+static_assert(offsetof(Player, th07PendingPlayerFields_b310_16a00) == kPlayerLegacyBridgeEndOffset);
+static_assert(offsetof(Player, th07BombCommonEffectXBits) == kPlayerBombCommonEffectXOffset);
+static_assert(offsetof(Player, th07BombCommonEffectYBits) == kPlayerBombCommonEffectYOffset);
+static_assert(offsetof(Player, th07BombCommonEffectDuration) == kPlayerBombCommonEffectDurationOffset);
+static_assert(offsetof(Player, th07Mode4EffectStartXBits) == kPlayerMode4EffectStartXOffset);
+static_assert(offsetof(Player, th07Mode4EffectStartYBits) == kPlayerMode4EffectStartYOffset);
+static_assert(offsetof(Player, th07Mode4EffectStartDuration) == kPlayerMode4EffectStartDurationOffset);
+static_assert(offsetof(Player, th07BombCommonEffectActivePointer) ==
+              kPlayerBombCommonEffectActivePointerOffset);
+static_assert(offsetof(Player, th07ModeTransitionEffectActivePointer) ==
+              kPlayerModeTransitionEffectActivePointerOffset);
+ZUN_ASSERT_SIZE(Player, kPlayerObjectClearSize);
 
 DIFFABLE_EXTERN(Player, g_Player);
 }; // namespace th07
