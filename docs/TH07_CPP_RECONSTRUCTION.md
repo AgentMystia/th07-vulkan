@@ -164,8 +164,9 @@ The post-switch action table records the remaining per-frame `FUN_00450d60` upda
 ## Next C++ Passes
 
 1. Decide whether to keep immediate diffuse submission or reconstruct the original `FUN_0044f690`/`FUN_0044f5c0` batched draw buffer.
-2. Replace the mapped mode-4 `FUN_00406930` producers in the actual player update and draw runtime after the remaining player mode/common-effect fields are proven.
+2. Replace the mapped mode-4 `FUN_00406930` producers in the actual player update and draw runtime after active effect lifetime is proven.
 3. Map the score/cherry globals behind the conditional RGB-white gate in `0041b0b0`/`0041b4a0`.
 4. Replace `Player`, `BombData`, and shot callbacks with TH07 `.sht` and bomb routine behavior.
 5. Map TH07 `GameManager`, `ResultScreen`, and score-file structures.
-6. Audit ECL opcode differences against `reference/ecl/ecldata*.decl`.
+6. Promote the 23 high TH07 ECL case side-effect surfaces from `config/ecl_high_opcode_cases.csv` into named owner fields only after ownership/lifetime evidence is proven; `scripts/audit-ecl-opcodes.mjs` also keeps opcodes `140` and `161` blocked because the current decompiler switch has no `0x8c` or `0xa1` case.
+7. Use the STD binary audit for Stage 6 parser work while `reference/std/stage6.dstd` remains empty; `scripts/audit-th07-resources.mjs` now proves `reference/extracted/stage6.std` has 2 objects, 4 quads, 36 instances, and 58 script instructions.

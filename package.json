@@ -4,12 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "node --check scripts/extract-th07-resources.mjs && node --check scripts/import-th06-baseline.mjs && node --check scripts/audit-th07-cpp.mjs && node --check scripts/audit-th07-resources.mjs && node --check scripts/audit-th07-vs-th06.mjs && node --check scripts/export-th07-ghidra.mjs && node --check scripts/export-th07-anchor-xrefs.mjs && node --check scripts/export-th07-decomp.mjs",
+    "check": "node --check scripts/extract-th07-resources.mjs && node --check scripts/import-th06-baseline.mjs && node --check scripts/audit-th07-cpp.mjs && node --check scripts/audit-th07-resources.mjs && node --check scripts/audit-th07-vs-th06.mjs && node --check scripts/audit-ecl-opcodes.mjs && node --check scripts/export-th07-ghidra.mjs && node --check scripts/export-th07-anchor-xrefs.mjs && node --check scripts/export-th07-decomp.mjs",
     "extract-resources": "node scripts/extract-th07-resources.mjs",
     "import-th06-baseline": "node scripts/import-th06-baseline.mjs",
     "audit-cpp": "node scripts/audit-th07-cpp.mjs",
     "audit-resources": "node scripts/audit-th07-resources.mjs",
     "audit-diff": "node scripts/audit-th07-vs-th06.mjs",
+    "audit-ecl": "node scripts/audit-ecl-opcodes.mjs",
     "ghidra-export": "node scripts/export-th07-ghidra.mjs",
     "ghidra-anchors": "node scripts/export-th07-anchor-xrefs.mjs",
     "ghidra-decomp": "node scripts/export-th07-decomp.mjs"
