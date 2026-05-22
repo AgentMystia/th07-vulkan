@@ -1,26 +1,26 @@
-opcode,case_label,evidence_lines,effect_surface,status,next_evidence
-136,0x88,2830-2831,"writes enemy+0x2e2a bit7 from arg0",source-derived,turn-case-surface-into-named-owner-fields
-137,0x89,2833-2860,"writes enemy+0x4f30 byte and +0x4f32/+0x4f34/+0x4f36 i16 fields; may call FUN_00455170(enemy, enemy+0x39f8, ratio<<1) when bit3 is set",source-derived,turn-case-surface-into-named-owner-fields
-138,0x8a,2861-2891,"writes global tables DAT_0049fc44/DAT_0049fc24/DAT_0049fc64 indexed by arg0; divides args by enemy+0x2bbc",source-derived,turn-case-surface-into-named-owner-fields
-139,0x8b,2892-2925,"writes globals DAT_012fe25c/DAT_012fe260/DAT_012fe264/DAT_012fe268 from four f32 operands",source-derived,turn-case-surface-into-named-owner-fields
-140,,,"decl opcode has no 0x8c case in current FUN_00410520 decompile",blocked,inspect-binary-disassembly-or-loader-translator
-141,0x8d,2926-2936,"writes enemy+0x4f40; resets timer-like fields enemy+0x4f3c=0 and enemy+0x4f38=-999",source-derived,turn-case-surface-into-named-owner-fields
-142,0x8e,2937-2946,"calls FUN_00424c00(enemy+0x2b0c, arg0_f32)",source-derived,turn-case-surface-into-named-owner-fields
-143,0x8f,2947-2974,"writes enemy+0x2f58 and enemy+0x2ee4; resets enemy+0x2f50/+0x2f54/+0x2f5c/+0x2f60/+0x2f64; copies 0x1a dwords from enemy+0x6fc to enemy+0x2ee8",source-derived,turn-case-surface-into-named-owner-fields
-144,0x90,2975-2997,"if DAT_012fe098[arg0] is nonzero writes *(DAT_012fe098[arg0]+0x2b08)=arg1",source-derived,turn-case-surface-into-named-owner-fields
-145,0x91,2998-3000,"calls FUN_00424740(0)",source-derived,turn-case-surface-into-named-owner-fields
-146,0x92,3001-3009,"writes global DAT_012fe0f0 from arg0",source-derived,turn-case-surface-into-named-owner-fields
-148,0x94,3038-3072,"writes enemy+0x2e2b bit1 from arg0; when bit is clear writes f32 args to *(enemy+0x2eb0)+0x24c/+0x250/+0x254",source-derived,turn-case-surface-into-named-owner-fields
-149,0x95,3073-3082,"writes f32 arg0 to enemy+0x0008",source-derived,turn-case-surface-into-named-owner-fields
-150,0x96,3083-3110,"writes two resolved float targets via FUN_0040f3c0 using FUN_0048bb40/FUN_0048bbf0 results scaled by arg3",source-derived,turn-case-surface-into-named-owner-fields
-151,0x97,3111-3129,"if enemy pointer table +0x2d8c[arg0] is nonzero writes f32 arg1 to pointed object +0x4a4",source-derived,turn-case-surface-into-named-owner-fields
-152,0x98,3130-3155,"writes f32 args to enemy+0x2b48/+0x2b4c/+0x2b50",source-derived,turn-case-surface-into-named-owner-fields
-153,0x99,3156-3176,"loops arg0 times; randomizes around enemy+0x2b0c/+0x2b10 using FUN_00431900 and constants; calls FUN_004326f0(&local_74,1,0)",source-derived,turn-case-surface-into-named-owner-fields
-154,0x9a,3177-3197,"writes a resolved float target via FUN_0040f3c0; branch uses player/global position comparison and FUN_00431900/FUN_00431930",source-derived,turn-case-surface-into-named-owner-fields
-155,0x9b,3198-3215,"if enemy pointer table +0x2d8c[arg0] is nonzero writes byte arg1 to pointed object +0x4e9",source-derived,turn-case-surface-into-named-owner-fields
-156,0x9c,3216-3234,"if enemy pointer table +0x2d8c[arg0] is nonzero writes f32 arg1 to pointed object +0x4b0",source-derived,turn-case-surface-into-named-owner-fields
-157,0x9d,3235-3261,"if enemy pointer table +0x2d8c[arg0] is nonzero writes f32 args to pointed object +0x4a8/+0x4ac",source-derived,turn-case-surface-into-named-owner-fields
-158,0x9e,3262-3295,"computes (arg1-arg2)*arg3+arg2 and writes the result to a resolved float target via FUN_0040f3c0",source-derived,turn-case-surface-into-named-owner-fields
-159,0x9f,3296-3304,"calls FUN_0042f5a2(arg0)",source-derived,turn-case-surface-into-named-owner-fields
-160,0xa0,3305-3313,"writes enemy+0x2e2b bit3 from arg0",source-derived,turn-case-surface-into-named-owner-fields
-161,,,"decl opcode has no 0xa1 case in current FUN_00410520 decompile",blocked,inspect-binary-disassembly-or-loader-translator
+opcode,jump_table_entry,target_address,case_label,evidence_lines,effect_surface,status,next_evidence
+136,0x00417a54,0x00415f5a,0x87,2825-2829,"writes enemy+0x2e29 bit5 from arg0 and sets enemy+0x2e2f to 2",source-derived,turn-case-surface-into-named-owner-fields
+137,0x00417a58,0x00415f8c,0x88,2830-2831,"writes enemy+0x2e2a bit7 from arg0",source-derived,turn-case-surface-into-named-owner-fields
+138,0x00417a5c,0x00415fb4,0x89,2833-2860,"writes enemy+0x4f30 byte and +0x4f32/+0x4f34/+0x4f36 i16 fields; may call FUN_00455170(enemy, enemy+0x39f8, ratio<<1) when bit3 is set",source-derived,helper-call-contract-compiled-owner-lifetime-pending
+139,0x00417a60,0x00414cae,0x8a,2861-2891,"writes global tables DAT_0049fc44/DAT_0049fc24/DAT_0049fc64 indexed by arg0; divides args by enemy+0x2bbc",source-derived,turn-case-surface-into-named-owner-fields
+140,0x00417a64,0x004160cf,0x8b,2892-2925,"writes globals DAT_012fe25c/DAT_012fe260/DAT_012fe264/DAT_012fe268 from four f32 operands",source-derived,turn-case-surface-into-named-owner-fields
+141,0x00417a68,0x0041677b,,3314-3316,"jump-table entry targets the common instruction-advance path with no side effects",source-derived,treat-as-no-op-until-runtime-naming-is-proven
+142,0x00417a6c,0x004161c7,0x8d,2926-2936,"writes enemy+0x4f40; resets timer-like fields enemy+0x4f3c=0 and enemy+0x4f38=-999",source-derived,turn-case-surface-into-named-owner-fields
+143,0x00417a70,0x00416233,0x8e,2937-2946,"calls FUN_00424c00(enemy+0x2b0c, arg0_f32)",source-derived,helper-call-contract-compiled-owner-lifetime-pending
+144,0x00417a74,0x00415097,0x8f,2947-2974,"writes enemy+0x2f58 and enemy+0x2ee4; resets enemy+0x2f50/+0x2f54/+0x2f5c/+0x2f60/+0x2f64; copies 0x1a dwords from enemy+0x6fc to enemy+0x2ee8",source-derived,turn-case-surface-into-named-owner-fields
+145,0x00417a78,0x00416284,0x90,2975-2997,"if DAT_012fe098[arg0] is nonzero writes *(DAT_012fe098[arg0]+0x2b08)=arg1",source-derived,turn-case-surface-into-named-owner-fields
+146,0x00417a7c,0x00416342,0x91,2998-3000,"calls FUN_00424740(0)",source-derived,helper-call-contract-compiled-owner-lifetime-pending
+148,0x00417a84,0x00414ee9,0x93,3010-3037,"writes enemy indexed tables +0x2ebc[arg0]=arg1 and +0x2ecc[arg0]=arg2",source-derived,turn-case-surface-into-named-owner-fields
+149,0x00417a88,0x00416353,0x94,3038-3072,"writes enemy+0x2e2b bit1 from arg0; when bit is clear writes f32 args to *(enemy+0x2eb0)+0x24c/+0x250/+0x254",source-derived,turn-case-surface-into-named-owner-fields
+150,0x00417a8c,0x00416495,0x95,3073-3082,"writes f32 arg0 to enemy+0x0008",source-derived,turn-case-surface-into-named-owner-fields
+151,0x00417a90,0x004164d7,0x96,3083-3110,"writes two resolved float targets via FUN_0040f3c0 using FUN_0048bb40/FUN_0048bbf0 results scaled by args",source-derived,helper-call-contract-compiled-owner-lifetime-pending
+152,0x00417a94,0x0041365d,0x97,3111-3129,"if enemy pointer table +0x2d8c[arg0] is nonzero writes f32 arg1 to pointed object +0x4a4",source-derived,turn-case-surface-into-named-owner-fields
+153,0x00417a98,0x004148df,0x98,3130-3155,"writes f32 args to enemy+0x2b48/+0x2b4c/+0x2b50",source-derived,turn-case-surface-into-named-owner-fields
+154,0x00417a9c,0x004154c9,0x99,3156-3176,"loops arg0 times; randomizes around enemy+0x2b0c/+0x2b10 using FUN_00431900 and constants; calls FUN_004326f0(&local_74,1,0)",source-derived,helper-call-contract-compiled-owner-lifetime-pending
+155,0x00417aa0,0x0041661a,0x9a,3177-3197,"writes a resolved float target via FUN_0040f3c0; branch uses player/global position comparison and FUN_00431900/FUN_00431930",source-derived,helper-call-contract-compiled-owner-lifetime-pending
+156,0x00417aa4,0x004138f6,0x9b,3198-3215,"if enemy pointer table +0x2d8c[arg0] is nonzero writes byte arg1 to pointed object +0x4e9",source-derived,turn-case-surface-into-named-owner-fields
+157,0x00417aa8,0x00413b3b,0x9c,3216-3234,"if enemy pointer table +0x2d8c[arg0] is nonzero writes f32 arg1 to pointed object +0x4b0",source-derived,turn-case-surface-into-named-owner-fields
+158,0x00417aac,0x00413bd3,0x9d,3235-3261,"if enemy pointer table +0x2d8c[arg0] is nonzero writes f32 args to pointed object +0x4a8/+0x4ac",source-derived,turn-case-surface-into-named-owner-fields
+159,0x00417ab0,0x004115e0,0x9e,3262-3295,"computes (arg1-arg2)*arg3+arg2 and writes the result to a resolved float target via FUN_0040f3c0",source-derived,helper-call-contract-compiled-owner-lifetime-pending
+160,0x00417ab4,0x004166e6,0x9f,3296-3304,"calls FUN_0042f5a2(arg0)",source-derived,helper-call-contract-compiled-owner-lifetime-pending
+161,0x00417ab8,0x00416729,0xa0,3305-3313,"writes enemy+0x2e2b bit3 from arg0",source-derived,turn-case-surface-into-named-owner-fields

@@ -14,6 +14,14 @@
 #include "ZunResult.hpp"
 #include "inttypes.hpp"
 
+#if defined(TH07_PLAYER_OBJDIFF) && defined(__i386__) && defined(__GNUC__)
+#define TH07_PLAYER_THISCALL __attribute__((thiscall))
+#define TH07_PLAYER_FASTCALL __attribute__((fastcall))
+#else
+#define TH07_PLAYER_THISCALL
+#define TH07_PLAYER_FASTCALL
+#endif
+
 namespace th07
 {
 struct Player;
@@ -198,11 +206,11 @@ struct Player
 
     static ZunResult RegisterChain(u8 unk);
     static void CutChain();
-    static ChainCallbackResult OnUpdate(Player *p);
-    static ChainCallbackResult OnDrawHighPrio(Player *p);
-    static ChainCallbackResult OnDrawLowPrio(Player *p);
-    static ZunResult AddedCallback(Player *p);
-    static ZunResult DeletedCallback(Player *p);
+    static ChainCallbackResult TH07_PLAYER_FASTCALL OnUpdate(Player *p);
+    static ChainCallbackResult TH07_PLAYER_FASTCALL OnDrawHighPrio(Player *p);
+    static ChainCallbackResult TH07_PLAYER_FASTCALL OnDrawLowPrio(Player *p);
+    static ZunResult TH07_PLAYER_FASTCALL AddedCallback(Player *p);
+    static ZunResult TH07_PLAYER_FASTCALL DeletedCallback(Player *p);
 
     static FireBulletResult FireSingleBullet(Player *, PlayerBullet *bullet, i32 bullet_idx, i32 framesSinceLastBullet,
                                              CharacterPowerData *powerData);
@@ -211,15 +219,21 @@ struct Player
     static FireBulletResult FireBulletReimuB(Player *, PlayerBullet *, u32, u32);
     static FireBulletResult FireBulletMarisaA(Player *, PlayerBullet *, u32, u32);
     static FireBulletResult FireBulletMarisaB(Player *, PlayerBullet *, u32, u32);
+    static FireBulletResult FireBulletSakuyaA(Player *, PlayerBullet *, u32, u32);
+    static FireBulletResult FireBulletSakuyaB(Player *, PlayerBullet *, u32, u32);
 
-    static void StartFireBulletTimer(Player *);
-    ZunResult HandlePlayerInputs();
-    static void UpdatePlayerBullets(Player *);
-    static ZunResult UpdateFireBulletsTimer(Player *);
+    static void TH07_PLAYER_FASTCALL StartFireBulletTimer(Player *);
+    ZunResult TH07_PLAYER_THISCALL HandlePlayerInputs();
+    static void TH07_PLAYER_FASTCALL UpdatePlayerBullets(Player *);
+    static ZunResult TH07_PLAYER_FASTCALL UpdateFireBulletsTimer(Player *);
 
-    static void SpawnBullets(Player *, u32 timer);
-    static void DrawBullets(Player *p);
-    static void DrawBulletExplosions(Player *p);
+    static void TH07_PLAYER_FASTCALL SpawnBullets(Player *, u32 timer);
+    static void TH07_PLAYER_FASTCALL DrawBullets(Player *p);
+    static void TH07_PLAYER_FASTCALL DrawBulletExplosions(Player *p);
+    static ZunResult TH07_PLAYER_FASTCALL OptionShotEffectCallback(Player *p, void *shot,
+                                                                   D3DXVECTOR3 *impactPos);
+    static void TH07_PLAYER_FASTCALL UpdateMode1Invulnerable(Player *p);
+    static void TH07_PLAYER_FASTCALL ResetOptionFields(Player *p);
 
     u8 &Th07ModeState()
     {
@@ -241,6 +255,27 @@ struct Player
         return *reinterpret_cast<u8 *>(reinterpret_cast<u8 *>(this) + kPlayerModeTransitionRequestOffset);
     }
 
+    ZunTimer &Th07OptionInterpolationTimer()
+    {
+        return *reinterpret_cast<ZunTimer *>(reinterpret_cast<u8 *>(this) +
+                                             kPlayerOptionInterpolationPreviousFrameOffset);
+    }
+
+    u32 &Th07MovementDirectionState()
+    {
+        return *reinterpret_cast<u32 *>(reinterpret_cast<u8 *>(this) + kPlayerMovementDirectionStateOffset);
+    }
+
+    f32 &Th07MovementHorizontalSpeed()
+    {
+        return *reinterpret_cast<f32 *>(reinterpret_cast<u8 *>(this) + kPlayerMovementHorizontalSpeedOffset);
+    }
+
+    f32 &Th07MovementVerticalSpeed()
+    {
+        return *reinterpret_cast<f32 *>(reinterpret_cast<u8 *>(this) + kPlayerMovementVerticalSpeedOffset);
+    }
+
     u32 &Th07BombCommonEffectXBits()
     {
         return th07BombCommonEffectXBits;
@@ -256,16 +291,22 @@ struct Player
         return th07BombCommonEffectDuration;
     }
 
-    f32 AngleFromPlayer(D3DXVECTOR3 *pos);
-    f32 AngleToPlayer(D3DXVECTOR3 *pos);
-    i32 CheckGraze(D3DXVECTOR3 *center, D3DXVECTOR3 *size);
-    i32 CalcKillBoxCollision(D3DXVECTOR3 *bulletCenter, D3DXVECTOR3 *bulletSize);
-    i32 CalcLaserHitbox(D3DXVECTOR3 *laserCenter, D3DXVECTOR3 *laserSize, D3DXVECTOR3 *rotation, f32 angle,
-                        i32 canGraze);
-    i32 CalcDamageToEnemy(D3DXVECTOR3 *enemyPos, D3DXVECTOR3 *enemySize, i32 *unk);
-    i32 CalcItemBoxCollision(D3DXVECTOR3 *center, D3DXVECTOR3 *size);
-    void ScoreGraze(D3DXVECTOR3 *center);
-    void Die();
+    f32 TH07_PLAYER_THISCALL AngleFromPlayer(D3DXVECTOR3 *pos);
+    f32 TH07_PLAYER_THISCALL AngleToPlayer(D3DXVECTOR3 *pos);
+    i32 TH07_PLAYER_THISCALL CalcBombCollision(D3DXVECTOR3 *center, D3DXVECTOR3 *size);
+    void TH07_PLAYER_THISCALL UpdateBombCollisionSlots();
+    Th07PlayerBombCollisionSlot *TH07_PLAYER_THISCALL RegisterBombCollisionRect(
+        D3DXVECTOR3 *center, f32 sizeX, f32 sizeY, u32 payloadBits);
+    Th07PlayerBombCollisionSlot *TH07_PLAYER_THISCALL RegisterBombCollisionCircle(
+        D3DXVECTOR3 *center, f32 radius, f32 radiusVelocity, i32 framesLeft, u32 payloadBits);
+    i32 TH07_PLAYER_THISCALL CheckGraze(D3DXVECTOR3 *center, D3DXVECTOR3 *size);
+    i32 TH07_PLAYER_THISCALL CalcKillBoxCollision(D3DXVECTOR3 *bulletCenter, D3DXVECTOR3 *bulletSize);
+    i32 TH07_PLAYER_THISCALL CalcLaserHitbox(D3DXVECTOR3 *laserCenter, D3DXVECTOR3 *laserSize,
+                                             D3DXVECTOR3 *rotation, f32 angle, i32 canGraze);
+    i32 TH07_PLAYER_THISCALL CalcDamageToEnemy(D3DXVECTOR3 *enemyPos, D3DXVECTOR3 *enemySize, i32 *unk);
+    i32 TH07_PLAYER_THISCALL CalcItemBoxCollision(D3DXVECTOR3 *center, D3DXVECTOR3 *size);
+    void TH07_PLAYER_THISCALL ScoreGraze(D3DXVECTOR3 *center);
+    void TH07_PLAYER_THISCALL Die();
 
     Th07PlayerOriginalAnmVmSlot playerSprite;
     Th07PlayerOriginalAnmVmSlot orbsSprite[3];
@@ -288,7 +329,12 @@ struct Player
     i32 unk_838[32];
     PlayerRect bombProjectiles[16];
     ZunTimer laserTimer[2];
-    u8 th07PendingPlayerFields_eec_23f0[0x23f0 - 0x0eec];
+    u8 th07PendingPlayerFields_eec_17dc[kPlayerBombCollisionSlotArrayOffset - 0x0eec];
+    Th07PlayerBombCollisionSlot th07BombCollisionSlots[kPlayerBombCollisionSlotCount];
+    u8 th07PendingPlayerFields_23dc_23f0
+        [kPlayerBombHorizontalSpeedMultiplierOffset -
+         (kPlayerBombCollisionSlotArrayOffset +
+          kPlayerBombCollisionSlotStride * kPlayerBombCollisionSlotCount)];
     f32 horizontalMovementSpeedMultiplierDuringBomb;
     f32 verticalMovementSpeedMultiplierDuringBomb;
     i32 respawnTimer;
@@ -325,8 +371,8 @@ struct Player
                                            (kPlayerMode4EffectStartDurationOffset + 4)];
     u32 th07BombCommonEffectActivePointer;
     u32 th07ModeTransitionEffectActivePointer;
-    u8 th07PendingPlayerFields_b7e70_b7e78[kPlayerObjectClearSize -
-                                           (kPlayerModeTransitionEffectActivePointerOffset + 4)];
+    u32 th07UnfocusedShotDataPointer;
+    u32 th07FocusedShotDataPointer;
 #pragma var_order(x, y)
     void inline SetToTopLeftPos(AnmVm *sprite)
     {
@@ -353,6 +399,7 @@ static_assert(offsetof(Player, grabItemSize) == kPlayerGrabItemSizeOffset);
 static_assert(offsetof(Player, orbsPosition[0]) == kPlayerLeftOptionPositionOffset);
 static_assert(offsetof(Player, orbsPosition[1]) == kPlayerRightOptionPositionOffset);
 static_assert(offsetof(Player, movementDelta) == kPlayerMovementDeltaOffset);
+static_assert(offsetof(Player, th07BombCollisionSlots) == kPlayerBombCollisionSlotArrayOffset);
 static_assert(offsetof(Player, horizontalMovementSpeedMultiplierDuringBomb) ==
               kPlayerBombHorizontalSpeedMultiplierOffset);
 static_assert(offsetof(Player, verticalMovementSpeedMultiplierDuringBomb) ==
@@ -368,6 +415,14 @@ static_assert(offsetof(Player, th07BombCommonEffectActivePointer) ==
               kPlayerBombCommonEffectActivePointerOffset);
 static_assert(offsetof(Player, th07ModeTransitionEffectActivePointer) ==
               kPlayerModeTransitionEffectActivePointerOffset);
+static_assert(offsetof(Player, th07UnfocusedShotDataPointer) == kPlayerShotDataPointerOffset);
+static_assert(offsetof(Player, th07FocusedShotDataPointer) == kPlayerFocusedShotDataPointerOffset);
+static_assert(MOVEMENT_NONE == kPlayerDirectionStateNone);
+static_assert(MOVEMENT_UP == kPlayerDirectionStateUp);
+static_assert(MOVEMENT_DOWN_RIGHT == kPlayerDirectionStateDownRight);
+static_assert(ORB_HIDDEN == kPlayerOptionStateHidden);
+static_assert(ORB_UNFOCUSED == kPlayerOptionStateUnfocused);
+static_assert(ORB_UNFOCUSING == kPlayerOptionStateUnfocusing);
 ZUN_ASSERT_SIZE(Player, kPlayerObjectClearSize);
 
 DIFFABLE_EXTERN(Player, g_Player);

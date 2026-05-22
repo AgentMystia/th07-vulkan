@@ -2,8 +2,10 @@
 
 #include "PlayerLayout.hpp"
 #include "Th07Constants.hpp"
+#include "Th07Timer.hpp"
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <string_view>
 
@@ -40,6 +42,8 @@ inline constexpr std::uint32_t kPlayerBombBackdropPlateauColor = 0x80303030;
 inline constexpr std::uint32_t kPlayerStageColorWriteCommonBackdropCallAddress = 0x004084d0;
 inline constexpr std::uint32_t kPlayerStageColorWriteMode4UpdateCallAddress = 0x0044162f;
 inline constexpr std::uint32_t kPlayerStageColorWriteMode4DrawCallAddress = 0x0044233b;
+inline constexpr std::uint32_t kPlayerModeUpdateFunctionAddress = 0x00441330;
+inline constexpr std::uint32_t kPlayerModeDrawFunctionAddress = 0x004420b0;
 inline constexpr std::uint32_t kPlayerModeCleanupFunctionAddress = 0x00441670;
 inline constexpr std::uint32_t kPlayerModeEnterMode4FunctionAddress = 0x00441960;
 inline constexpr std::uint32_t kPlayerModeEnterMode3FunctionAddress = 0x00441bd0;
@@ -90,6 +94,14 @@ inline constexpr std::uint32_t kPlayerMode4EffectInitialScaleBits = 0x3f800000;
 inline constexpr std::uint32_t kPlayerMode4EffectFinalScaleBits = 0x3e800000;
 inline constexpr std::uint32_t kPlayerMode3EffectInitialScaleBits = 0x3d800000;
 inline constexpr std::uint32_t kPlayerMode3EffectFinalScaleBits = 0x3fa66666;
+inline constexpr std::uint32_t kPlayerModeEffectActiveFlagOffset = 0x02cc;
+inline constexpr std::uint32_t kPlayerModeEffectLifecycleNoInstruction = 0;
+inline constexpr std::int32_t kPlayerModeEffectLifecycleNoEffectId = -1;
+inline constexpr std::size_t kPlayerModeEffectLifecycleContractCount = 4;
+inline constexpr std::uint32_t kPlayerModeRuntimeNoInstruction = 0;
+inline constexpr std::uint32_t kPlayerModeRuntimeNoOwnerOffset = 0;
+inline constexpr std::uint8_t kPlayerModeRuntimeDefaultBranchState = 0xff;
+inline constexpr std::size_t kPlayerModeRuntimeBranchContractCount = 4;
 struct PlayerBombCommonEffectConfig {
     std::int32_t effectId;
     std::int32_t spawnSlotArgument;
@@ -153,6 +165,58 @@ struct PlayerMode3EntryOwnerState {
     std::int32_t lockoutFrames;
 };
 
+enum class PlayerModeEffectPointerSlot {
+    CommonEffect,
+    TransitionEffect,
+};
+
+enum class PlayerModeEffectLifecycleKind {
+    ReplaceTransitionEffect,
+    ClearCommonEffect,
+    ClearTransitionEffect,
+};
+
+struct PlayerModeEffectLifecycleContract {
+    PlayerModeEffectLifecycleKind kind;
+    PlayerModeEffectPointerSlot pointerSlot;
+    std::uint32_t functionAddress;
+    std::uint32_t activePointerOffset;
+    std::uint32_t activeFlagWriteAddress;
+    std::uint32_t pointerClearAddress;
+    std::uint32_t spawnCallAddress;
+    std::uint32_t pointerStoreAddress;
+    std::int32_t effectId;
+    std::int32_t spawnSlotArgument;
+    std::int32_t spawnFlagArgument;
+    std::string_view evidence;
+};
+
+enum class PlayerModeRuntimeBranchKind {
+    UpdateMode3,
+    UpdateMode4,
+    UpdateDefault,
+    DrawMode4,
+};
+
+struct PlayerModeRuntimeBranchContract {
+    PlayerModeRuntimeBranchKind kind;
+    std::uint32_t functionAddress;
+    std::uint8_t rawModeState;
+    std::uint32_t dispatchInstructionAddress;
+    std::uint32_t timerOwnerOffset;
+    std::uint32_t timerCallAddress;
+    std::uint32_t timerFunctionAddress;
+    std::uint32_t durationCompareAddress;
+    std::uint32_t activePointerOffset;
+    std::uint32_t activePointerCheckAddress;
+    std::uint32_t primaryColorWriteAddress;
+    std::uint32_t whiteColorWriteAddress;
+    std::uint32_t ownerStateWriteAddress;
+    std::uint32_t terminalFunctionAddress;
+    std::uint32_t stageColorCallAddress;
+    std::string_view evidence;
+};
+
 enum class PlayerBombRoutineSlot {
     UnfocusedCalc = 0,
     UnfocusedDraw = 1,
@@ -201,11 +265,22 @@ struct PlayerStageColorWriteProducer {
 
 extern const std::array<PlayerBombRoutineSet, 6> kPlayerBombRoutineSets;
 extern const std::array<PlayerStageColorWriteProducer, 3> kPlayerStageColorWriteProducers;
+extern const std::array<PlayerModeEffectLifecycleContract,
+                        kPlayerModeEffectLifecycleContractCount>
+    kPlayerModeEffectLifecycleContracts;
+extern const std::array<PlayerModeRuntimeBranchContract,
+                        kPlayerModeRuntimeBranchContractCount>
+    kPlayerModeRuntimeBranchContracts;
 
 const PlayerBombRoutineSet *FindPlayerBombRoutineSet(Th07ShotType shotType);
 const PlayerBombRoutineTarget *FindPlayerBombRoutine(Th07ShotType shotType, PlayerBombRoutineSlot slot);
 const PlayerBombRoutineTarget *FindPlayerBombRoutine(Th07ShotType shotType, bool focused, bool draw);
 const PlayerStageColorWriteProducer *FindPlayerStageColorWriteProducer(PlayerStageColorWriteKind kind);
+const PlayerModeEffectLifecycleContract *FindPlayerModeEffectLifecycleContract(
+    PlayerModeEffectLifecycleKind kind, std::uint32_t functionAddress,
+    PlayerModeEffectPointerSlot pointerSlot);
+const PlayerModeRuntimeBranchContract *FindPlayerModeRuntimeBranchContract(
+    PlayerModeRuntimeBranchKind kind);
 PlayerBombCommonEffectConfig BuildPlayerBombCommonEffectConfig(std::uint32_t targetXBits,
                                                                std::uint32_t targetYBits,
                                                                std::int32_t durationFrames);

@@ -8,7 +8,9 @@
 #include "ChainPriorities.hpp"
 #include "FileSystem.hpp"
 #include "GameManager.hpp"
+#include "GuiLayout.hpp"
 #include "Player.hpp"
+#include "ScreenEffect.hpp"
 #include "SoundPlayer.hpp"
 #include "Stage.hpp"
 #include "ZunColor.hpp"
@@ -19,6 +21,7 @@ namespace th07
 DIFFABLE_STATIC(Gui, g_Gui);
 DIFFABLE_STATIC(ChainElem, g_GuiCalcChain);
 DIFFABLE_STATIC(ChainElem, g_GuiDrawChain);
+DIFFABLE_STATIC(i32, g_GuiGlobalState);
 
 ZunBool Gui::IsStageFinished()
 {
@@ -555,15 +558,15 @@ ZunResult GuiImpl::RunMsg()
             args = &this->msg.currentInstr->args;
             g_AnmManager->SetAndExecuteScriptIdx(
                 &this->msg.portraits[args->portraitAnmScript.portraitIdx],
-                args->portraitAnmScript.anmScriptIdx +
-                    (args->portraitAnmScript.portraitIdx == 0 ? ANM_SCRIPT_FACE_START : ANM_SCRIPT_FACE_START + 2));
+                args->portraitAnmScript.anmScriptIdx + kTh07GuiMsgPortraitScriptBase +
+                    (args->portraitAnmScript.portraitIdx == 0 ? 0 : kTh07GuiMsgPortraitScriptEnemyOffset));
             break;
         case MSG_OPCODE_PORTRAITANMSPRITE:
             args = &this->msg.currentInstr->args;
             g_AnmManager->SetActiveSprite(
                 &this->msg.portraits[args->portraitAnmScript.portraitIdx],
-                args->portraitAnmScript.anmScriptIdx +
-                    (args->portraitAnmScript.portraitIdx == 0 ? ANM_SCRIPT_FACE_START : ANM_SCRIPT_FACE_START + 8));
+                args->portraitAnmScript.anmScriptIdx + kTh07GuiMsgPortraitScriptBase +
+                    (args->portraitAnmScript.portraitIdx == 0 ? 0 : kTh07GuiMsgPortraitSpriteEnemyOffset));
             break;
         case MSG_OPCODE_TEXTDIALOGUE:
             args = &this->msg.currentInstr->args;
@@ -644,7 +647,7 @@ ZunResult GuiImpl::RunMsg()
         case MSG_OPCODE_MSGHALT:
             goto SKIP_TIME_INCREMENT;
         case MSG_OPCODE_MUSICFADEOUT:
-            g_Supervisor.FadeOutMusic(4.0);
+            g_Supervisor.FadeOutMusic(kTh07GuiMsgOpcodeMusicFadeoutSeconds);
             break;
         case MSG_OPCODE_STAGEEND:
             g_GameManager.guiScore = g_GameManager.score;
@@ -678,7 +681,13 @@ ZunResult GuiImpl::RunMsg()
             }
             goto SKIP_TIME_INCREMENT;
         case MSG_OPCODE_WAITSKIPPABLE:
-            this->msg.dialogueSkippable = this->msg.currentInstr->args.dialogueSkippable;
+            this->msg.dialogueSkippable = this->msg.currentInstr->args.dialogueSkippable.isSkippable;
+            break;
+        case MSG_OPCODE_SCREENFADE:
+            ScreenEffect::RegisterChain(SCREEN_EFFECT_FULLSCREEN_FADE_OUT,
+                                        kTh07GuiMsgOpcodeScreenFadeDurationFrames,
+                                        kTh07GuiMsgOpcodeScreenFadeColor, 0, 0);
+            g_GuiGlobalState = kTh07GuiMsgOpcodeScreenFadeGlobalStateValue;
             break;
         }
         this->msg.currentInstr =

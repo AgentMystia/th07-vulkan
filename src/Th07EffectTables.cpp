@@ -1,5 +1,8 @@
 #include "Th07EffectTables.hpp"
 
+#include "Rng.hpp"
+#include "Th07Timer.hpp"
+
 #include <bit>
 #include <cstddef>
 #include <cmath>
@@ -1434,15 +1437,9 @@ void TickStageCameraInterpolationTimer(Th07StageCameraInterpolationTimerState *t
                                        float effectiveFramerateMultiplier)
 {
     timer->previousFrame = timer->currentFrame;
-    if (framerateMultiplier <= 0.99f) {
-        timer->subframe += effectiveFramerateMultiplier;
-        if (timer->subframe >= 1.0f) {
-            timer->currentFrame += 1;
-            timer->subframe -= 1.0f;
-        }
-    } else {
-        timer->currentFrame += 1;
-    }
+    TickTh07FrameSubtimer(&timer->currentFrame,
+                          &timer->subframe,
+                          effectiveFramerateMultiplier);
 }
 
 float AdvanceStageCameraInterpolationTimer(Th07StageCameraRuntimeState *state,
@@ -2366,20 +2363,7 @@ Th07EffectCameraSnapState BuildTh07EffectCameraSnapState(Th07EffectPerspectiveCa
 
 float NormalizeTh07EffectAngle(float angle)
 {
-    int iterations = 0;
-    while (angle > kTh07EffectRadialRandomAngleBias) {
-        angle -= kTh07EffectRadialRandomAngleScale;
-        if (iterations++ > 16) {
-            break;
-        }
-    }
-    while (angle < -kTh07EffectRadialRandomAngleBias) {
-        angle += kTh07EffectRadialRandomAngleScale;
-        if (iterations++ > 16) {
-            break;
-        }
-    }
-    return angle;
+    return NormalizeTh07AngleWithAddend(angle, 0.0f);
 }
 
 Th07EffectRadialState BuildTh07EffectEasedRadialStateFromAngle(Th07EffectVector3 position,

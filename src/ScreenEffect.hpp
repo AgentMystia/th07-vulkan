@@ -24,6 +24,7 @@ enum ScreenEffects
     SCREEN_EFFECT_FADE_IN,
     SCREEN_EFFECT_SHAKE,
     SCREEN_EFFECT_FADE_OUT,
+    SCREEN_EFFECT_FULLSCREEN_FADE_OUT = 4,
 };
 
 struct ScreenEffect

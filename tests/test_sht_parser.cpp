@@ -1,8 +1,16 @@
 #include "ReferencePaths.hpp"
+#include "BorderSystem.hpp"
+#include "ClearBonusSystem.hpp"
+#include "CherrySystem.hpp"
+#include "EclOpcodeTables.hpp"
+#include "GuiLayout.hpp"
 #include "PlayerBombTables.hpp"
 #include "ShtFile.hpp"
 #include "Th07EffectTables.hpp"
+#include "Th07PlayerShotTables.hpp"
 #include "Th07ResourceManifest.hpp"
+#include "Th07ScoreTables.hpp"
+#include "Th07Timer.hpp"
 
 #include <algorithm>
 #include <array>
@@ -160,6 +168,11 @@ std::uint32_t ReadPeU32AtVa(const std::vector<std::uint8_t> &bytes, std::uint32_
     return ReadU32(bytes, PeVirtualAddressToFileOffset(bytes, address));
 }
 
+std::uint8_t ReadPeU8AtVa(const std::vector<std::uint8_t> &bytes, std::uint32_t address)
+{
+    return bytes[PeVirtualAddressToFileOffset(bytes, address)];
+}
+
 std::string ReadPeCStringAtVa(const std::vector<std::uint8_t> &bytes, std::uint32_t address)
 {
     std::size_t offset = PeVirtualAddressToFileOffset(bytes, address);
@@ -308,6 +321,308 @@ void CheckCallbackTablesAgainstOriginalExeIfAvailable()
     for (std::size_t i = 0; i < th07::kShtOnCollisionCallbacks.size(); ++i) {
         assert(ReadPeU32AtVa(exe, th07::kShtOnCollisionCallbackTableAddress + static_cast<std::uint32_t>(i * 4)) ==
                th07::kShtOnCollisionCallbacks[i].originalAddress);
+    }
+
+    CheckPeBytesAtVa(exe, th07::kTh07EclDispatchFunctionAddress, {0x55, 0x8b, 0xec});
+    CheckPeBytesAtVa(exe, 0x00410724, {0x81, 0xbd, 0x98, 0xfc, 0xff, 0xff, 0xa0, 0x00, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x0041073a, {0xff, 0x24, 0x85, 0x38, 0x78, 0x41, 0x00});
+    for (const th07::Th07EclHighOpcodeCase &opcodeCase : th07::kTh07HighEclOpcodeCases) {
+        assert(opcodeCase.jumpTableEntryAddress ==
+               th07::kTh07EclOpcodeJumpTableAddress + static_cast<std::uint32_t>((opcodeCase.opcode - 1) * 4));
+        assert(ReadPeU32AtVa(exe, opcodeCase.jumpTableEntryAddress) == opcodeCase.targetAddress);
+    }
+    for (const th07::Th07EclHighOpcodeCallContract &callContract : th07::kTh07HighEclCallContracts) {
+        CheckPeNearCallTargetAtVa(exe, callContract.callInstructionAddress, callContract.calleeAddress);
+    }
+    CheckPeBytesAtVa(exe, th07::kTh07EclResolveFloatTargetFunctionAddress, {0x55, 0x8b, 0xec});
+    CheckPeBytesAtVa(exe, 0x0040f3fe, {0x81, 0xe9, 0x14, 0x27, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x0040f407, {0x83, 0x7d, 0xf4, 0x45});
+    CheckPeBytesAtVa(exe, 0x0040f414, {0x0f, 0xb6, 0x82, 0x68, 0xf6, 0x40, 0x00});
+    CheckPeBytesAtVa(exe, 0x0040f41b, {0xff, 0x24, 0x85, 0xd0, 0xf5, 0x40, 0x00});
+    for (const th07::Th07EclFloatTargetResolverContract &target :
+         th07::kTh07EclFloatTargetResolverContracts) {
+        if (target.owner == th07::Th07EclFloatTargetOwner::Enemy) {
+            CheckPeBytesAtVa(exe, target.caseAddress, {0x8b, 0x45, 0xfc, 0x05});
+            assert(ReadPeU32AtVa(exe, target.caseAddress + 4) == target.ownerOffsetOrAddress);
+        }
+        else {
+            assert(target.owner == th07::Th07EclFloatTargetOwner::Global);
+            assert(ReadPeU8AtVa(exe, target.caseAddress) == 0xb8);
+            assert(ReadPeU32AtVa(exe, target.caseAddress + 1) == target.ownerOffsetOrAddress);
+        }
+    }
+    CheckPeBytesAtVa(exe, th07::kTh07EclIntReadResolverFunctionAddress, {0x55, 0x8b, 0xec});
+    CheckPeBytesAtVa(exe, 0x0040e5c5, {0x81, 0xe9, 0x10, 0x27, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x0040e5ce, {0x83, 0x7d, 0xd0, 0x49});
+    CheckPeBytesAtVa(exe, 0x0040e5db, {0xff, 0x24, 0x95, 0xce, 0xea, 0x40, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07EclIntReadResolverDefaultAddress, {0x8b, 0x45, 0xd4});
+    assert(ReadPeU32AtVa(exe, th07::kTh07EclIntReadResolverJumpTableAddress) == 0x0040e5e2);
+    assert(ReadPeU32AtVa(exe, th07::kTh07EclIntReadResolverJumpTableAddress + 0x04 * 4) == 0x0040e6ec);
+    assert(ReadPeU32AtVa(exe, th07::kTh07EclIntReadResolverJumpTableAddress + 0x18 * 4) == 0x0040ea53);
+    assert(ReadPeU32AtVa(exe, th07::kTh07EclIntReadResolverJumpTableAddress + 0x1a * 4) == 0x0040ea6e);
+    assert(ReadPeU32AtVa(exe, th07::kTh07EclIntReadResolverJumpTableAddress + 0x38 * 4) == 0x0040e9df);
+    assert(ReadPeU32AtVa(exe, th07::kTh07EclIntReadResolverJumpTableAddress + 0x39 * 4) ==
+           th07::kTh07EclIntReadResolverDefaultAddress);
+    assert(ReadPeU32AtVa(exe, th07::kTh07EclIntReadResolverJumpTableAddress + 0x49 * 4) == 0x0040e6d9);
+    CheckPeNearCallTargetAtVa(exe, 0x0040e6f5, th07::kTh07EclReadResolverFloatToIntBridgeAddress);
+    CheckPeNearCallTargetAtVa(exe, 0x0040e9d5, th07::kTh07EclReadResolverRandomIntFunctionAddress);
+    CheckPeNearCallTargetAtVa(exe, 0x0040ea62, th07::kTh07EclReadResolverVectorLengthFunctionAddress);
+    CheckPeNearCallTargetAtVa(exe, 0x0040eabb, th07::kTh07EclReadResolverDistanceFunctionAddress);
+
+    CheckPeBytesAtVa(exe, th07::kTh07EclFloatReadResolverFunctionAddress, {0x55, 0x8b, 0xec});
+    CheckPeNearCallTargetAtVa(exe, 0x0040edfc, th07::kTh07EclReadResolverFloatToIntBridgeAddress);
+    CheckPeBytesAtVa(exe, 0x0040ee07, {0x2d, 0x10, 0x27, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x0040ee0f, {0x83, 0x7d, 0xd4, 0x49});
+    CheckPeBytesAtVa(exe, 0x0040ee1c, {0xff, 0x24, 0x8d, 0x8a, 0xf2, 0x40, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07EclFloatReadResolverDefaultAddress, {0xd9, 0x45, 0x08});
+    assert(ReadPeU32AtVa(exe, th07::kTh07EclFloatReadResolverJumpTableAddress) == 0x0040ee23);
+    assert(ReadPeU32AtVa(exe, th07::kTh07EclFloatReadResolverJumpTableAddress + 0x04 * 4) == 0x0040ef83);
+    assert(ReadPeU32AtVa(exe, th07::kTh07EclFloatReadResolverJumpTableAddress + 0x18 * 4) == 0x0040f148);
+    assert(ReadPeU32AtVa(exe, th07::kTh07EclFloatReadResolverJumpTableAddress + 0x1a * 4) == 0x0040f22e);
+    assert(ReadPeU32AtVa(exe, th07::kTh07EclFloatReadResolverJumpTableAddress + 0x38 * 4) == 0x0040f1d2);
+    assert(ReadPeU32AtVa(exe, th07::kTh07EclFloatReadResolverJumpTableAddress + 0x3c * 4) == 0x0040f1f9);
+    assert(ReadPeU32AtVa(exe, th07::kTh07EclFloatReadResolverJumpTableAddress + 0x49 * 4) == 0x0040f084);
+    CheckPeNearCallTargetAtVa(exe, 0x0040f157, th07::kTh07EclReadResolverVectorLengthFunctionAddress);
+    CheckPeNearCallTargetAtVa(exe, 0x0040f1c8, th07::kTh07EclReadResolverRandomFloatFunctionAddress);
+    CheckPeNearCallTargetAtVa(exe, 0x0040f1fe, th07::kTh07EclReadResolverRandomFloatFunctionAddress);
+    CheckPeNearCallTargetAtVa(exe, 0x0040f27a, th07::kTh07EclReadResolverDistanceFunctionAddress);
+
+    const th07::Th07EclClearHelperContract &clearHelper = th07::kTh07EclClearHelperContract;
+    CheckPeBytesAtVa(exe, clearHelper.functionAddress, {0x55, 0x8b, 0xec});
+    CheckPeBytesAtVa(exe, 0x0042474a, {0xc7, 0x45, 0xe8, 0x18, 0xb2, 0x63, 0x00});
+    CheckPeBytesAtVa(exe, 0x00424766, {0x81, 0xc1, 0x68, 0x0d, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x0042476f, {0x81, 0x7d, 0xf0, 0x00, 0x04, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x0042477f, {0x0f, 0xb7, 0x82, 0xfc, 0x0b, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x00424794, {0x83, 0xfa, static_cast<std::uint8_t>(clearHelper.itemSkippedState)});
+    CheckPeBytesAtVa(exe, 0x0042479b, {0x83, 0x7d, 0x08, 0x00});
+    CheckPeBytesAtVa(exe, 0x004247a1, {0x83, 0x7d, 0x08, 0x09});
+    CheckPeBytesAtVa(exe, 0x004247a7, {0x83, 0x7d, 0x08, clearHelper.dynamicEffectModeLimit});
+    CheckPeBytesAtVa(exe, 0x004247b4, {0x8b, 0x91, 0x60, 0xa1, 0x37, 0x00});
+    CheckPeBytesAtVa(exe, 0x004247be, {0x05, 0x8c, 0x0b, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x004247c4, {0xb9, 0x70, 0x5c, 0x57, 0x00});
+    CheckPeNearCallTargetAtVa(exe, 0x004247c9, clearHelper.effectSpawnFunctionAddress);
+    CheckPeBytesAtVa(exe, 0x004247d0,
+                     {0x6a, clearHelper.fallbackEffectArg, 0x6a, clearHelper.fallbackEffectKind});
+    CheckPeNearCallTargetAtVa(exe, 0x004247e3, clearHelper.effectSpawnFunctionAddress);
+    CheckPeBytesAtVa(exe, 0x004247e8, {0xb9, 0x5a, 0x03, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x004247f2, {0xf3, 0xab});
+    CheckPeBytesAtVa(exe, 0x004247f9, {0x66, 0xc7, 0x82, 0xfc, 0x0b, 0x00, 0x00, 0x05, 0x00});
+    CheckPeBytesAtVa(exe, 0x0042480a, {0x05, 0x28, 0x66, 0x36, 0x00});
+    CheckPeBytesAtVa(exe, 0x00424827, {0x81, 0xc2, 0xec, 0x04, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x00424830, {0x83, 0x7d, 0xf0, 0x40});
+    CheckPeBytesAtVa(exe, 0x0042483d, {0x83, 0xb8, 0xd4, 0x04, 0x00, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x0042484b, {0x0f, 0xb7, 0x91, 0xe4, 0x04, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x00424852,
+                     {0x83, 0xe2, static_cast<std::uint8_t>(clearHelper.objectProtectedFlagMask)});
+    CheckPeBytesAtVa(exe, 0x00424859, {0x83, 0x7d, 0x08, clearHelper.protectedBypassMode});
+    CheckPeBytesAtVa(exe, 0x00424877, {0xc6, 0x82, 0xe8, 0x04, 0x00, 0x00, clearHelper.objectStateValue});
+    CheckPeBytesAtVa(exe, 0x004248a0, {0xc7, 0x00, 0x19, 0xfc, 0xff, 0xff});
+    CheckPeBytesAtVa(exe, 0x004248ac, {0x8b, 0x82, 0xb8, 0x04, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x004248b2, {0x89, 0x81, 0xb4, 0x04, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x004248cf, {0x8b, 0x91, 0xa8, 0x04, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x004248db, {0x8b, 0x88, 0xa4, 0x04, 0x00, 0x00});
+    CheckPeNearCallTargetAtVa(exe, 0x004248e8, clearHelper.lineDirectionFunctionAddress);
+    CheckPeBytesAtVa(exe, 0x004248f0, {0xd9, 0x82, 0xac, 0x04, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x00424909, {0xd8, 0x80, 0x98, 0x04, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x0042491b, {0xd8, 0x81, 0x9c, 0x04, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x00424938, {0x8b, 0x88, 0x60, 0xa1, 0x37, 0x00});
+    CheckPeNearCallTargetAtVa(exe, 0x00424948, clearHelper.effectSpawnFunctionAddress);
+    CheckPeNearCallTargetAtVa(exe, 0x0042495c, clearHelper.effectSpawnFunctionAddress);
+    CheckPeBytesAtVa(exe, 0x00424964, {0xd8, 0x05, 0x84, 0x8a, 0x49, 0x00});
+    CheckPeBytesAtVa(exe, 0x00424975, {0xc7, 0x81, 0xd0, 0x04, 0x00, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x00424987, {0xc7, 0x82, 0x2c, 0xa1, 0x37, 0x00, 0x0a});
+
+    const th07::Th07EclItemClearRadiusHelperContract &itemClear =
+        th07::kTh07EclItemClearRadiusHelperContract;
+    CheckPeBytesAtVa(exe, itemClear.functionAddress, {0x55, 0x8b, 0xec});
+    CheckPeBytesAtVa(exe, 0x00424c0a, {0xc7, 0x45, 0xec, 0x18, 0xb2, 0x63, 0x00});
+    CheckPeBytesAtVa(exe, 0x00424c2f, {0x81, 0xc1, 0x68, 0x0d, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x00424c38, {0x81, 0x7d, 0xf0, 0x00, 0x04, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x00424c48, {0x0f, 0xb7, 0x82, 0xfc, 0x0b, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x00424c56, {0x0f, 0xb7, 0x91, 0xfc, 0x0b, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x00424c5d, {0x83, 0xfa, 0x05});
+    CheckPeBytesAtVa(exe, 0x00424c67, {0x05, 0x8c, 0x0b, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x00424ce3, {0x6a, itemClear.effectArg, 0x6a, itemClear.effectKind});
+    CheckPeBytesAtVa(exe, 0x00424cea, {0x81, 0xc1, 0x8c, 0x0b, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x00424cf1, {0xb9, 0x70, 0x5c, 0x57, 0x00});
+    CheckPeNearCallTargetAtVa(exe, itemClear.effectSpawnCallAddress, itemClear.effectSpawnFunctionAddress);
+    CheckPeBytesAtVa(exe, 0x00424cfb, {0xb9, 0x5a, 0x03, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x00424d05, {0xf3, 0xab});
+    const th07::Th07EclVisualEffectSpawnContract &visualSpawn =
+        th07::kTh07EclVisualEffectSpawnContract;
+    CheckPeBytesAtVa(exe, visualSpawn.functionAddress, {0x55, 0x8b, 0xec});
+    CheckPeBytesAtVa(exe, 0x004326fc, {0x8b, 0x88, 0xe8, 0xe2, 0x0a, 0x00});
+    CheckPeBytesAtVa(exe, 0x00432702, {0x69, 0xc9, 0x88, 0x02, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x00432710, {0xa1, 0x78, 0x62, 0x62, 0x00});
+    CheckPeNearCallTargetAtVa(exe, 0x00432718, visualSpawn.floatToIntFunctionAddress);
+    CheckPeBytesAtVa(exe, 0x0043271d, {0x3d, 0x80, 0x00, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x00432730, {0xc7, 0x45, 0x0c, 0x07, 0x00, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x00432749, {0x81, 0x7d, 0xfc, 0x4c, 0x04, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x0043276e, {0x0f, 0xbe, 0x82, 0x7d, 0x02, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x004327d7, {0x05, 0x4c, 0x02, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x004327fc,
+                     {0xc7, 0x81, 0x5c, 0x02, 0x00, 0x00, 0xcd, 0xcc, 0x0c, 0xc0});
+    CheckPeBytesAtVa(exe, 0x0043284e, {0xc7, 0x01, 0x19, 0xfc, 0xff, 0xff});
+    CheckPeNearCallTargetAtVa(exe, 0x0043285f, visualSpawn.randomFloatFunctionAddress);
+    CheckPeNearCallTargetAtVa(exe, 0x0043287e, visualSpawn.randomFloatFunctionAddress);
+    CheckPeBytesAtVa(exe, 0x004328d1, {0xc6, 0x80, 0x7f, 0x02, 0x00, 0x00, 0x01});
+    CheckPeBytesAtVa(exe, 0x004328e3, {0xc6, 0x81, 0x7f, 0x02, 0x00, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x004328f6, {0xa1, 0x44, 0x9e, 0x4b, 0x00});
+    CheckPeBytesAtVa(exe, 0x00432912, {0x8b, 0x94, 0x81, 0xf0, 0x8e, 0x02, 0x00});
+    CheckPeNearCallTargetAtVa(exe, 0x00432921, visualSpawn.setScriptFunctionAddress);
+    CheckPeBytesAtVa(exe, 0x00432929,
+                     {0xc7, 0x81, 0xb8, 0x01, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff});
+    CheckPeBytesAtVa(exe, 0x00432936, {0x8b, 0x82, 0xc0, 0x01, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x0043294d, {0xc6, 0x82, 0x80, 0x02, 0x00, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x00432957, {0xc6, 0x80, 0x7e, 0x02, 0x00, 0x00, 0x01});
+    CheckPeBytesAtVa(exe, 0x00432972, {0x81, 0xc2, 0x60, 0xe0, 0x0a, 0x00});
+
+    CheckPeBytesAtVa(exe, th07::kTh07EclProjectionFiniteCheckFunctionAddress, {0x8b, 0x44, 0x24, 0x08});
+    CheckPeBytesAtVa(exe, th07::kTh07EclProjectionFiniteCheckFunctionAddress + 0x04,
+                     {0x25, 0x00, 0x00, 0xf0, 0x7f});
+    CheckPeBytesAtVa(exe, th07::kTh07EclProjectionFiniteCheckFunctionAddress + 0x09,
+                     {0x3d, 0x00, 0x00, 0xf0, 0x7f});
+    for (const th07::Th07EclProjectionHelperContract &projection :
+         th07::kTh07EclProjectionHelperContracts) {
+        CheckPeBytesAtVa(exe, projection.wrapperFunctionAddress,
+                         {0x83, 0xec, static_cast<std::uint8_t>(th07::kTh07EclProjectionWrapperStackBytes)});
+        CheckPeBytesAtVa(exe, projection.wrapperFunctionAddress + 0x03, {0xdd, 0x14, 0x24});
+        CheckPeNearCallTargetAtVa(exe, projection.finiteCheckCallAddress,
+                                  th07::kTh07EclProjectionFiniteCheckFunctionAddress);
+        CheckPeNearCallTargetAtVa(exe, projection.coreCallAddress, projection.coreFunctionAddress);
+        CheckPeBytesAtVa(exe, projection.wrapperFunctionAddress + 0x10,
+                         {0x83, 0xc4, static_cast<std::uint8_t>(th07::kTh07EclProjectionWrapperStackBytes), 0xc3});
+        CheckPeBytesAtVa(exe, projection.coreFunctionAddress, {0x52, 0x9b, 0xd9, 0x3c, 0x24});
+        CheckPeBytesAtVa(exe, projection.coreFunctionAddress + 0x07, {0x66, 0x81, 0x3c, 0x24, 0x7f, 0x02});
+        CheckPeBytesAtVa(exe, projection.coreFunctionAddress + 0x0f, {0xd9, 0x2d, 0xb8, 0x11, 0x49, 0x00});
+        if (projection.kind == th07::Th07EclProjectionHelperKind::Sin) {
+            CheckPeBytesAtVa(exe, projection.primaryMathInstructionAddress, {0xd9, 0xfe});
+            CheckPeBytesAtVa(exe, projection.reducedMathInstructionAddress, {0xd9, 0xfe});
+        }
+        else {
+            CheckPeBytesAtVa(exe, projection.primaryMathInstructionAddress, {0xd9, 0xff});
+            CheckPeBytesAtVa(exe, projection.reducedMathInstructionAddress, {0xd9, 0xff});
+        }
+        CheckPeBytesAtVa(exe, projection.primaryMathInstructionAddress + 0x02, {0x9b, 0xdf, 0xe0, 0x9e});
+        CheckPeBytesAtVa(exe, projection.primaryMathInstructionAddress + 0x08,
+                         {0x83, 0x3d, 0x7c, 0xf7, 0x49, 0x00, 0x00});
+        CheckPeBytesAtVa(exe, projection.primaryMathInstructionAddress + 0x15, {0xba});
+        assert(ReadPeU32AtVa(exe, projection.primaryMathInstructionAddress + 0x16) == projection.mathErrorKind);
+        CheckPeBytesAtVa(exe, projection.primaryMathInstructionAddress + 0x1a, {0x8d, 0x0d});
+        assert(ReadPeU32AtVa(exe, projection.primaryMathInstructionAddress + 0x1c) ==
+               projection.mathErrorContextAddress);
+        CheckPeBytesAtVa(exe, projection.rangeReductionConstantLoadAddress, {0xdb, 0x2d});
+        assert(ReadPeU32AtVa(exe, projection.rangeReductionConstantLoadAddress + 0x02) ==
+               th07::kTh07EclProjectionRangeReductionConstantAddress);
+        CheckPeBytesAtVa(exe, projection.rangeReductionLoopAddress, {0xd9, 0xf5});
+        CheckPeBytesAtVa(exe, projection.rangeReductionLoopAddress + 0x02, {0x9b, 0xdf, 0xe0, 0x9e});
+        CheckPeBytesAtVa(exe, projection.rangeReductionLoopAddress + 0x06, {0x7a, 0xf8});
+        CheckPeBytesAtVa(exe, projection.reducedMathInstructionAddress + 0x02, {0xeb, 0xcd});
+    }
+
+    const th07::Th07EclOpcode138RecordHelperContract &opcode138Record =
+        th07::kTh07EclOpcode138RecordHelperContract;
+    CheckPeBytesAtVa(exe, opcode138Record.functionAddress, {0x55, 0x8b, 0xec});
+    CheckPeBytesAtVa(exe, 0x00455176, {0x89, 0x4d, 0xe0});
+    CheckPeBytesAtVa(exe, 0x00455179, {0x83, 0x7d, 0x10, 0x03});
+    CheckPeBytesAtVa(exe, 0x0045517f, {0x83, 0xc8, 0xff});
+    CheckPeBytesAtVa(exe, 0x0045518a, {0x8b, 0x88, 0xe4, 0x01, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x00455193, {0xd9, 0x41, 0x24});
+    CheckPeBytesAtVa(exe, 0x00455196, {0xd8, 0x42, 0x28});
+    CheckPeBytesAtVa(exe, 0x004551b1, {0xd8, 0x60, 0x1c});
+    CheckPeBytesAtVa(exe, 0x004551c3, {0xd9, 0x42, 0x20});
+    CheckPeBytesAtVa(exe, 0x004551c6, {0xd8, 0x40, 0x2c});
+    CheckPeBytesAtVa(exe, 0x004551d2, {0x8b, 0x45, 0x10});
+    CheckPeBytesAtVa(exe, 0x004551dd, {0x83, 0xe8, 0x01});
+    CheckPeBytesAtVa(exe, 0x004551e6, {0xd8, 0x7d, 0xe4});
+    CheckPeBytesAtVa(exe, 0x004551ec, {0xc7, 0x45, 0xf8, 0x00, 0x00, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x00455201, {0x89, 0x45, 0xf8});
+    CheckPeBytesAtVa(exe, 0x00455207, {0x83, 0xc1, 0x38});
+    CheckPeBytesAtVa(exe, 0x00455224, {0x89, 0x48, 0x14});
+    CheckPeBytesAtVa(exe, 0x0045522d, {0x89, 0x42, 0x18});
+    CheckPeBytesAtVa(exe, 0x00455236, {0x8b, 0x82, 0xb8, 0x01, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x0045523c, {0x89, 0x41, 0x10});
+    CheckPeBytesAtVa(exe, 0x00455242, {0xc7, 0x41, 0x0c, 0x00, 0x00, 0x80, 0x3f});
+    CheckPeBytesAtVa(exe, 0x00455257, {0xd9, 0x40, 0x28});
+    CheckPeBytesAtVa(exe, 0x0045525a, {0xd8, 0x41, 0x2c});
+    CheckPeBytesAtVa(exe, 0x00455263, {0x83, 0xc2, 0x1c});
+    CheckPeBytesAtVa(exe, 0x00455269, {0xc7, 0x45, 0xf8, 0x01, 0x00, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x0045527b, {0x83, 0xc1, 0x02});
+    CheckPeBytesAtVa(exe, 0x00455284, {0x83, 0xc2, 0x38});
+    CheckPeBytesAtVa(exe, 0x004552a1, {0x89, 0x51, 0x14});
+    CheckPeBytesAtVa(exe, 0x004552aa, {0x89, 0x48, 0x18});
+    CheckPeBytesAtVa(exe, 0x004552b3, {0x8b, 0x88, 0xb8, 0x01, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x004552b9, {0x89, 0x4a, 0x10});
+    CheckPeBytesAtVa(exe, 0x004552bf, {0xc7, 0x42, 0x0c, 0x00, 0x00, 0x80, 0x3f});
+    CheckPeBytesAtVa(exe, 0x004552c8, {0x33, 0xc0});
+    CheckPeBytesAtVa(exe, 0x00416090, {0x83, 0xe1, opcode138Record.enabledBitMask});
+    CheckPeBytesAtVa(exe, 0x0041609a, {0x0f, 0xbf, 0x82, 0x32, 0x4f, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x004160a4, {0x0f, 0xbf, 0x89, 0x36, 0x4f, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x004160ae, {0xd1, 0xe0});
+    CheckPeBytesAtVa(exe, 0x004160b4, {0x81, 0xc2, 0xf8, 0x39, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x004160bf, {0x8b, 0x0d, 0x44, 0x9e, 0x4b, 0x00});
+    CheckPeNearCallTargetAtVa(exe, opcode138Record.callInstructionAddress,
+                              opcode138Record.functionAddress);
+
+    CheckPeBytesAtVa(exe, th07::kTh07TimerForceStepProducerFunctionAddress, {0x55, 0x8b, 0xec});
+    CheckPeBytesAtVa(exe, th07::kTh07TimerForceStepProducerMultiplierStoreAddress,
+                     {0xd9, 0x1d, 0xc8, 0x5a, 0x57, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07TimerForceStepProducerFlagReadAddress,
+                     {0x8b, 0x0d, 0xdc, 0x5a, 0x57, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07TimerForceStepProducerFlagOrAddress, {0x83, 0xc9, 0x20});
+    CheckPeBytesAtVa(exe, th07::kTh07TimerForceStepProducerFlagWriteAddress,
+                     {0x89, 0x0d, 0xdc, 0x5a, 0x57, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07TimerIncrementFunctionAddress, {0x55, 0x8b, 0xec});
+    CheckPeBytesAtVa(exe, th07::kTh07TimerIncrementForceFlagReadAddress, {0xa1, 0xdc, 0x5a, 0x57, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07TimerIncrementForceFlagReadAddress + 5, {0xc1, 0xe8, 0x05});
+    CheckPeBytesAtVa(exe, th07::kTh07TimerIncrementForceFlagReadAddress + 8, {0x83, 0xe0, 0x01});
+    CheckPeBytesAtVa(exe, th07::kTh07TimerIncrementPreviousSentinelWriteAddress,
+                     {0x8b, 0x45, 0xfc, 0xc7, 0x00, 0x19, 0xfc, 0xff, 0xff});
+    CheckPeBytesAtVa(exe, th07::kTh07TimerIncrementMultiplierLoadAddress,
+                     {0xd9, 0x05, 0xc8, 0x5a, 0x57, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07TimerIncrementMultiplierLoadAddress + 6,
+                     {0xd8, 0x1d, 0x58, 0x8a, 0x49, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07TimerIncrementWholeFrameAddAddress,
+                     {0x8b, 0x45, 0xfc, 0x8b, 0x40, 0x08, 0x03, 0x45, 0x08});
+    CheckPeNearCallTargetAtVa(exe,
+                              th07::kTh07TimerIncrementNegativeCallAddress,
+                              th07::kTh07TimerDecrementFunctionAddress);
+    CheckPeBytesAtVa(exe, th07::kTh07TimerIncrementSubframeMultiplyAddress,
+                     {0xdb, 0x45, 0x08, 0xd8, 0x0d, 0xc8, 0x5a, 0x57, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07TimerIncrementOneFrameCompareAddress,
+                     {0xd9, 0x40, 0x04, 0xd8, 0x1d, 0x54, 0x8a, 0x49, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07TimerDecrementFunctionAddress, {0x55, 0x8b, 0xec});
+    CheckPeBytesAtVa(exe, th07::kTh07TimerDecrementForceFlagReadAddress, {0xa1, 0xdc, 0x5a, 0x57, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07TimerDecrementForceFlagReadAddress + 5, {0xc1, 0xe8, 0x05});
+    CheckPeBytesAtVa(exe, th07::kTh07TimerDecrementForceFlagReadAddress + 8, {0x83, 0xe0, 0x01});
+    CheckPeBytesAtVa(exe, th07::kTh07TimerDecrementPreviousSentinelWriteAddress,
+                     {0x8b, 0x45, 0xfc, 0xc7, 0x00, 0x19, 0xfc, 0xff, 0xff});
+    CheckPeBytesAtVa(exe, th07::kTh07TimerDecrementMultiplierLoadAddress,
+                     {0xd9, 0x05, 0xc8, 0x5a, 0x57, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07TimerDecrementMultiplierLoadAddress + 6,
+                     {0xd8, 0x1d, 0x58, 0x8a, 0x49, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07TimerDecrementWholeFrameSubtractAddress,
+                     {0x8b, 0x45, 0xfc, 0x8b, 0x40, 0x08, 0x2b, 0x45, 0x08});
+    CheckPeNearCallTargetAtVa(exe,
+                              th07::kTh07TimerDecrementNegativeCallAddress,
+                              th07::kTh07TimerIncrementFunctionAddress);
+    CheckPeBytesAtVa(exe, th07::kTh07TimerDecrementSubframeMultiplyAddress,
+                     {0xdb, 0x45, 0x08, 0xd8, 0x0d, 0xc8, 0x5a, 0x57, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07TimerDecrementZeroCompareAddress,
+                     {0xd9, 0x40, 0x04, 0xd8, 0x1d, 0x4c, 0x8a, 0x49, 0x00});
+    assert(ReadPeU32AtVa(exe, th07::kTh07TimerZeroConstantAddress) == th07::kTh07TimerZeroBits);
+    assert(ReadPeU32AtVa(exe, th07::kTh07TimerOneFrameConstantAddress) == th07::kTh07TimerOneFrameBits);
+    assert(ReadPeU32AtVa(exe, th07::kTh07TimerSubframeThresholdAddress) ==
+           th07::kTh07TimerSubframeThresholdBits);
+    for (const th07::Th07TimerForceStepFlagAccess &access : th07::kTh07TimerForceStepFlagAccesses) {
+        CheckPeBytesAtVa(exe, access.functionAddress, {0x55, 0x8b, 0xec});
+        if (access.kind == th07::Th07TimerForceStepFlagAccessKind::ProducerSet) {
+            CheckPeBytesAtVa(exe, access.instructionAddress, {0x83, 0xc9, 0x20});
+        }
+        else {
+            CheckPeBytesAtVa(exe, access.instructionAddress, {0xa1, 0xdc, 0x5a, 0x57, 0x00});
+        }
+        assert(access.bitMask == th07::kTh07TimerForceStepMask);
     }
 
     for (std::int32_t effectIdx = 0; effectIdx < th07::kTh07EffectTableCount; ++effectIdx) {
@@ -486,11 +801,131 @@ void CheckCallbackTablesAgainstOriginalExeIfAvailable()
     CheckPeBytesAtVa(exe, 0x004426a4, {0x66, 0xc7, 0x81, 0xd8, 0x01, 0x00, 0x00, 0x80, 0x04});
     CheckPeBytesAtVa(exe, 0x004426e3, {0x66, 0xc7, 0x82, 0xd8, 0x01, 0x00, 0x00, 0x81, 0x04});
     CheckPeBytesAtVa(exe, th07::kPlayerInitFunctionAddress, {0x55, 0x8b, 0xec});
+    CheckPeBytesAtVa(exe, th07::kTh07PlayerInitUnfocusedShotTypeLoadAddress,
+                     {0x0f, 0xb6, 0x05, 0x47, 0xf6, 0x62, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07PlayerInitUnfocusedShotDataPointerAddAddress,
+                     {0x81, 0xc1, 0x70, 0x7e, 0x0b, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07PlayerInitUnfocusedShtPathLoadAddress,
+                     {0x8b, 0x14, 0x85, 0x30, 0xf5, 0x49, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07PlayerInitUnfocusedShtLoadCallAddress,
+                     {0xe8, 0x6b, 0x07, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07PlayerInitFocusedShotTypeLoadAddress,
+                     {0x0f, 0xb6, 0x0d, 0x47, 0xf6, 0x62, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07PlayerInitFocusedShotDataPointerAddAddress,
+                     {0x05, 0x74, 0x7e, 0x0b, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07PlayerInitFocusedShtPathLoadAddress,
+                     {0x8b, 0x14, 0x8d, 0x48, 0xf5, 0x49, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07PlayerInitFocusedShtLoadCallAddress,
+                     {0xe8, 0x42, 0x07, 0x00, 0x00});
+    for (std::size_t i = 0; i < th07::kTh07ShtPathTableEntryCount; ++i) {
+        const std::uint32_t offset = static_cast<std::uint32_t>(i * th07::kTh07ShtPathTableEntryStride);
+        assert(ReadPeU32AtVa(exe, th07::kTh07ShtUnfocusedPathTableAddress + offset) ==
+               th07::kTh07ShtPathStringAddresses[i]);
+        assert(ReadPeU32AtVa(exe, th07::kTh07ShtFocusedPathTableAddress + offset) ==
+               th07::kTh07ShtPathStringAddresses[th07::kTh07ShtPathTableEntryCount + i]);
+    }
     CheckPeBytesAtVa(exe, th07::kPlayerMovementFunctionAddress, {0x55, 0x8b, 0xec});
+    CheckPeBytesAtVa(exe, th07::kPlayerMovementDirectionStateClearAddress,
+                     {0xc7, 0x82, 0x1c, 0x24, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kPlayerMovementInputUpReadAddress,
+                     {0x0f, 0xb7, 0x05, 0x50, 0x9e, 0x4b, 0x00, 0x83, 0xe0, 0x10});
+    CheckPeBytesAtVa(exe, 0x0043eea0,
+                     {0xc7, 0x81, 0x1c, 0x24, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x0043eebe,
+                     {0xc7, 0x80, 0x1c, 0x24, 0x00, 0x00, 0x05, 0x00, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x0043eedf,
+                     {0xc7, 0x82, 0x1c, 0x24, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kPlayerMovementInputDownReadAddress,
+                     {0x0f, 0xb7, 0x05, 0x50, 0x9e, 0x4b, 0x00, 0x83, 0xe0, 0x20});
+    CheckPeBytesAtVa(exe, 0x0043ef02,
+                     {0xc7, 0x81, 0x1c, 0x24, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x0043ef20,
+                     {0xc7, 0x80, 0x1c, 0x24, 0x00, 0x00, 0x07, 0x00, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x0043ef41,
+                     {0xc7, 0x82, 0x1c, 0x24, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kPlayerMovementInputLeftReadAddress,
+                     {0x0f, 0xb7, 0x05, 0x50, 0x9e, 0x4b, 0x00, 0x83, 0xe0, 0x40});
+    CheckPeBytesAtVa(exe, 0x0043ef61,
+                     {0xc7, 0x81, 0x1c, 0x24, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kPlayerMovementInputRightReadAddress,
+                     {0x0f, 0xb7, 0x15, 0x50, 0x9e, 0x4b, 0x00, 0x81, 0xe2, 0x80, 0x00, 0x00,
+                      0x00});
+    CheckPeBytesAtVa(exe, 0x0043ef82,
+                     {0xc7, 0x80, 0x1c, 0x24, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kPlayerMovementInputFocusReadAddress,
+                     {0x0f, 0xb7, 0x0d, 0x50, 0x9e, 0x4b, 0x00, 0x83, 0xe1, 0x04});
+    CheckPeBytesAtVa(exe, th07::kPlayerMovementFocusHeldWriteAddress,
+                     {0xc6, 0x82, 0x0b, 0x24, 0x00, 0x00, 0x01});
+    CheckPeBytesAtVa(exe, th07::kPlayerMovementFocusNotHeldWriteAddress,
+                     {0xc6, 0x80, 0x0b, 0x24, 0x00, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kPlayerMovementFocusedOrthogonalSpeedFirstLoadAddress,
+                     {0x8b, 0x42, 0x28});
+    CheckPeBytesAtVa(exe, th07::kPlayerMovementFocusedDiagonalSpeedFirstLoadAddress,
+                     {0xd9, 0x40, 0x30});
+    CheckPeBytesAtVa(exe, th07::kPlayerMovementUnfocusedOrthogonalSpeedFirstLoadAddress,
+                     {0x8b, 0x48, 0x24});
+    CheckPeBytesAtVa(exe, th07::kPlayerMovementUnfocusedDiagonalSpeedFirstLoadAddress,
+                     {0xd9, 0x41, 0x2c});
+    CheckPeBytesAtVa(exe, th07::kPlayerMovementLeanLeftScriptWriteAddress,
+                     {0x66, 0xc7, 0x80, 0xd8, 0x01, 0x00, 0x00, 0x01, 0x04});
+    CheckPeBytesAtVa(exe, th07::kPlayerMovementCenterFromLeftScriptWriteAddress,
+                     {0x66, 0xc7, 0x81, 0xd8, 0x01, 0x00, 0x00, 0x02, 0x04});
+    CheckPeBytesAtVa(exe, th07::kPlayerMovementLeanRightScriptWriteAddress,
+                     {0x66, 0xc7, 0x82, 0xd8, 0x01, 0x00, 0x00, 0x03, 0x04});
+    CheckPeBytesAtVa(exe, th07::kPlayerMovementCenterFromRightScriptWriteAddress,
+                     {0x66, 0xc7, 0x80, 0xd8, 0x01, 0x00, 0x00, 0x04, 0x04});
+    CheckPeBytesAtVa(exe, th07::kPlayerMovementLeanLeftApplyScriptCallAddress,
+                     {0xe8, 0xf8, 0xf7, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kPlayerMovementCenterFromLeftApplyScriptCallAddress,
+                     {0xe8, 0x94, 0xf7, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kPlayerMovementLeanRightApplyScriptCallAddress,
+                     {0xe8, 0x31, 0xf7, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kPlayerMovementCenterFromRightApplyScriptCallAddress,
+                     {0xe8, 0xcc, 0xf6, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kPlayerMovementHorizontalSpeedStoreAddress,
+                     {0x89, 0x82, 0x20, 0x24, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kPlayerMovementVerticalSpeedStoreAddress,
+                     {0x89, 0x91, 0x24, 0x24, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kPlayerMovementHorizontalMultiplierReadAddress,
+                     {0xd8, 0x88, 0xf0, 0x23, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kPlayerMovementHorizontalTimerMultiplierReadAddress,
+                     {0xd8, 0x0d, 0xc8, 0x5a, 0x57, 0x00});
+    CheckPeBytesAtVa(exe, th07::kPlayerMovementVerticalMultiplierReadAddress,
+                     {0xd8, 0x8a, 0xf4, 0x23, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kPlayerMovementVerticalTimerMultiplierReadAddress,
+                     {0xd8, 0x0d, 0xc8, 0x5a, 0x57, 0x00});
+    CheckPeBytesAtVa(exe, th07::kPlayerMovementHorizontalDeltaStoreAddress,
+                     {0xd9, 0x99, 0xcc, 0x09, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kPlayerMovementVerticalDeltaStoreAddress,
+                     {0xd9, 0x98, 0xd0, 0x09, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kPlayerMovementPlayfieldMinXCompareAddress,
+                     {0xd8, 0x1d, 0x74, 0xf8, 0x62, 0x00});
+    CheckPeBytesAtVa(exe, th07::kPlayerMovementPlayfieldMaxXStoreAddress,
+                     {0xd9, 0x99, 0x30, 0x09, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kPlayerMovementPlayfieldMinYCompareAddress,
+                     {0xd8, 0x1d, 0x78, 0xf8, 0x62, 0x00});
+    CheckPeBytesAtVa(exe, th07::kPlayerMovementPlayfieldMaxYStoreAddress,
+                     {0xd9, 0x98, 0x34, 0x09, 0x00, 0x00});
     CheckPeBytesAtVa(exe, th07::kPlayerKillBoxCollisionFunctionAddress, {0x55, 0x8b, 0xec});
     CheckPeBytesAtVa(exe, th07::kPlayerGrazeCollisionFunctionAddress, {0x55, 0x8b, 0xec});
     CheckPeBytesAtVa(exe, th07::kPlayerItemBoxCollisionFunctionAddress, {0x55, 0x8b, 0xec});
     CheckPeBytesAtVa(exe, th07::kPlayerLaserHitboxFunctionAddress, {0x55, 0x8b, 0xec});
+    CheckPeBytesAtVa(exe, th07::kPlayerBombCollisionFunctionAddress, {0x55, 0x8b, 0xec});
+    CheckPeBytesAtVa(exe, th07::kPlayerBombCollisionUpdateFunctionAddress, {0x55, 0x8b, 0xec});
+    CheckPeBytesAtVa(exe, th07::kPlayerBombCollisionRegisterRectFunctionAddress, {0x55, 0x8b, 0xec});
+    CheckPeBytesAtVa(exe, th07::kPlayerBombCollisionRegisterCircleFunctionAddress, {0x55, 0x8b, 0xec});
+    CheckPeBytesAtVa(exe, th07::kPlayerBombCollisionFunctionAddress + 0x0c,
+                     {0x05, 0xdc, 0x17, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kPlayerBombCollisionFunctionAddress + 0x19,
+                     {0xd8, 0x35, 0x70, 0x8a, 0x49, 0x00});
+    CheckPeBytesAtVa(exe, th07::kPlayerBombCollisionUpdateFunctionAddress + 0x2a,
+                     {0xc7, 0x84, 0x0a, 0xe8, 0x09, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kPlayerBombCollisionUpdateFunctionAddress + 0x3a,
+                     {0x05, 0xdc, 0x17, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kPlayerBombCollisionRegisterRectFunctionAddress + 0x0c,
+                     {0x05, 0xdc, 0x17, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kPlayerBombCollisionRegisterCircleFunctionAddress + 0x0c,
+                     {0x05, 0xdc, 0x17, 0x00, 0x00});
     CheckPeBytesAtVa(exe, 0x0043e2e7, {0xd9, 0x82, 0x48, 0x09, 0x00, 0x00});
     CheckPeBytesAtVa(exe, 0x0043e30d, {0xd9, 0x81, 0x54, 0x09, 0x00, 0x00});
     CheckPeBytesAtVa(exe, 0x0043e471, {0xd9, 0x80, 0x60, 0x09, 0x00, 0x00});
@@ -549,16 +984,23 @@ void CheckCallbackTablesAgainstOriginalExeIfAvailable()
     CheckPeBytesAtVa(exe, 0x00441a38, {0xc6, 0x80, 0x0d, 0x24, 0x00, 0x00, 0x01});
     CheckPeBytesAtVa(exe, 0x00441a42, {0xc6, 0x81, 0x08, 0x24, 0x00, 0x00, 0x04});
     CheckPeBytesAtVa(exe, 0x00441a4c, {0x83, 0xba, 0x6c, 0x7e, 0x0b, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x00441a5e, {0xc6, 0x81, 0xcc, 0x02, 0x00, 0x00, 0x00});
     CheckPeBytesAtVa(exe, 0x00441a68, {0x83, 0xba, 0x68, 0x7e, 0x0b, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x00441a7a, {0xc6, 0x81, 0xcc, 0x02, 0x00, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x00441a84, {0xc7, 0x82, 0x68, 0x7e, 0x0b, 0x00, 0x00, 0x00, 0x00, 0x00});
     CheckPeBytesAtVa(exe, 0x00441a8e, {0x6a, 0xff, 0x6a, 0x01, 0x6a, 0x04});
     CheckPeBytesAtVa(exe, 0x00441a9d, {0x6a, 0x1c});
     CheckPeBytesAtVa(exe, 0x00441a9f, {0xb9, 0x50, 0xe2, 0x2f, 0x01});
+    CheckPeNearCallTargetAtVa(exe, 0x00441aa4, th07::kPlayerBombCommonEffectSpawnFunctionAddress);
     CheckPeBytesAtVa(exe, 0x00441b13, {0xc7, 0x81, 0x1c, 0x02, 0x00, 0x00, 0x00, 0x00, 0x80, 0x3f});
     CheckPeBytesAtVa(exe, 0x00441b2d, {0xc7, 0x80, 0x20, 0x02, 0x00, 0x00, 0x00, 0x00, 0x80, 0x3e});
     CheckPeBytesAtVa(exe, 0x00441b74, {0x89, 0x82, 0x6c, 0x7e, 0x0b, 0x00});
     CheckPeBytesAtVa(exe, 0x00441bdc, {0x83, 0xb8, 0x6c, 0x7e, 0x0b, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x00441bee, {0xc6, 0x82, 0xcc, 0x02, 0x00, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x00441bf8, {0xc7, 0x80, 0x6c, 0x7e, 0x0b, 0x00, 0x00, 0x00, 0x00, 0x00});
     CheckPeBytesAtVa(exe, 0x00441c02, {0x6a, 0xff, 0x6a, 0x01, 0x6a, 0x04});
     CheckPeBytesAtVa(exe, 0x00441c12, {0x6a, 0x1c});
+    CheckPeNearCallTargetAtVa(exe, 0x00441c19, th07::kPlayerBombCommonEffectSpawnFunctionAddress);
     CheckPeBytesAtVa(exe, 0x00441c55, {0xc7, 0x41, 0x08, 0x1e, 0x00, 0x00, 0x00});
     CheckPeBytesAtVa(exe, 0x00441c7c, {0xc7, 0x82, 0x18, 0x02, 0x00, 0x00, 0x00, 0x00, 0x80, 0x3d});
     CheckPeBytesAtVa(exe, 0x00441c96, {0xc7, 0x81, 0x20, 0x02, 0x00, 0x00, 0x66, 0x66, 0xa6, 0x3f});
@@ -574,6 +1016,7 @@ void CheckCallbackTablesAgainstOriginalExeIfAvailable()
     CheckPeBytesAtVa(exe, 0x004417b8, {0xc7, 0x82, 0xfc, 0x23, 0x00, 0x00, 0x28, 0x00, 0x00, 0x00});
     CheckPeBytesAtVa(exe, 0x004417c5, {0xc6, 0x80, 0x0d, 0x24, 0x00, 0x00, 0x00});
     CheckPeBytesAtVa(exe, 0x004417cf, {0x83, 0xb9, 0x6c, 0x7e, 0x0b, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, 0x004417e1, {0xc6, 0x80, 0xcc, 0x02, 0x00, 0x00, 0x00});
     CheckPeBytesAtVa(exe, 0x004417eb, {0xc7, 0x81, 0x6c, 0x7e, 0x0b, 0x00, 0x00, 0x00, 0x00, 0x00});
     CheckPeBytesAtVa(exe, 0x004429da, {0xc7, 0x45, 0xfc, 0xd8, 0xda, 0x4b, 0x00});
     CheckPeBytesAtVa(exe, 0x004429e1, {0xb9, 0x9e, 0xdf, 0x02, 0x00});
@@ -595,6 +1038,64 @@ void CheckCallbackTablesAgainstOriginalExeIfAvailable()
         CheckPeNearCallTargetAtVa(exe, producer.callInstructionAddress,
                                   th07::kTh07StageAnmManagerColorWriteFunctionAddress);
     }
+    for (const th07::PlayerModeEffectLifecycleContract &contract :
+         th07::kPlayerModeEffectLifecycleContracts) {
+        CheckPeBytesAtVa(exe, contract.functionAddress, {0x55, 0x8b, 0xec});
+        CheckPeBytesAtVa(exe, contract.activeFlagWriteAddress, {0xc6});
+        if (contract.pointerClearAddress != th07::kPlayerModeEffectLifecycleNoInstruction) {
+            CheckPeC7ImmediateAtVa(exe, contract.pointerClearAddress, 0);
+        }
+        if (contract.spawnCallAddress != th07::kPlayerModeEffectLifecycleNoInstruction) {
+            CheckPeNearCallTargetAtVa(exe, contract.spawnCallAddress,
+                                      th07::kPlayerBombCommonEffectSpawnFunctionAddress);
+        }
+        if (contract.pointerStoreAddress != th07::kPlayerModeEffectLifecycleNoInstruction) {
+            CheckPeBytesAtVa(exe, contract.pointerStoreAddress, {0x89});
+        }
+    }
+    for (const th07::PlayerModeRuntimeBranchContract &contract :
+         th07::kPlayerModeRuntimeBranchContracts) {
+        CheckPeBytesAtVa(exe, contract.functionAddress, {0x55, 0x8b, 0xec});
+        if (contract.timerCallAddress != th07::kPlayerModeRuntimeNoInstruction) {
+            CheckPeNearCallTargetAtVa(exe, contract.timerCallAddress, contract.timerFunctionAddress);
+        }
+        if (contract.activePointerCheckAddress != th07::kPlayerModeRuntimeNoInstruction) {
+            CheckPeBytesAtVa(exe, contract.activePointerCheckAddress, {0x83});
+        }
+        if (contract.primaryColorWriteAddress != th07::kPlayerModeRuntimeNoInstruction) {
+            CheckPeC7ImmediateAtVa(exe, contract.whiteColorWriteAddress, 0xffffffff);
+        }
+
+        switch (contract.kind) {
+        case th07::PlayerModeRuntimeBranchKind::UpdateMode3:
+            CheckPeBytesAtVa(exe, contract.dispatchInstructionAddress, {0x83, 0xfa, 0x03});
+            CheckPeBytesAtVa(exe, contract.durationCompareAddress, {0x83, 0x7d, 0xf8, 0x00});
+            CheckPeC7ImmediateAtVa(exe, contract.primaryColorWriteAddress, 0xff404040);
+            CheckPeBytesAtVa(exe, contract.ownerStateWriteAddress,
+                             {0xc6, 0x82, 0x08, 0x24, 0x00, 0x00, 0x00});
+            break;
+        case th07::PlayerModeRuntimeBranchKind::UpdateMode4:
+            CheckPeBytesAtVa(exe, contract.dispatchInstructionAddress, {0x83, 0xfa, 0x04});
+            CheckPeBytesAtVa(exe, contract.durationCompareAddress, {0x83, 0x7d, 0xe4, 0x00});
+            CheckPeC7ImmediateAtVa(exe, contract.primaryColorWriteAddress, 0xffff0000);
+            CheckPeNearCallTargetAtVa(exe, contract.ownerStateWriteAddress,
+                                      contract.terminalFunctionAddress);
+            CheckPeNearCallTargetAtVa(exe, contract.stageColorCallAddress,
+                                      th07::kTh07StageAnmManagerColorWriteFunctionAddress);
+            break;
+        case th07::PlayerModeRuntimeBranchKind::UpdateDefault:
+            CheckPeBytesAtVa(exe, contract.dispatchInstructionAddress, {0x8b, 0x55, 0xd0});
+            CheckPeBytesAtVa(exe, contract.ownerStateWriteAddress, {0x89, 0x10});
+            break;
+        case th07::PlayerModeRuntimeBranchKind::DrawMode4:
+            CheckPeBytesAtVa(exe, contract.dispatchInstructionAddress, {0x83, 0xfa, 0x04});
+            CheckPeBytesAtVa(exe, contract.durationCompareAddress, {0x83, 0x7d, 0xf8, 0x00});
+            CheckPeC7ImmediateAtVa(exe, contract.primaryColorWriteAddress, 0xffff0000);
+            CheckPeNearCallTargetAtVa(exe, contract.stageColorCallAddress,
+                                      th07::kTh07StageAnmManagerColorWriteFunctionAddress);
+            break;
+        }
+    }
     CheckPeBytesAtVa(exe, 0x00441593, {0x81, 0x3d, 0xe0, 0x44, 0x4d, 0x00, 0xfe, 0x01, 0x00, 0x00});
     CheckPeBytesAtVa(exe, 0x004415f3, {0x6b, 0xc0, 0x50});
     CheckPeBytesAtVa(exe, 0x004415f7, {0xb9, 0x1e, 0x00, 0x00, 0x00});
@@ -604,6 +1105,397 @@ void CheckCallbackTablesAgainstOriginalExeIfAvailable()
     CheckPeBytesAtVa(exe, th07::kTh07GameManagerRegisterFunctionAddress, {0x55, 0x8b, 0xec});
     CheckPeBytesAtVa(exe, th07::kTh07GameManagerCleanupFunctionAddress, {0x55, 0x8b, 0xec});
     CheckPeBytesAtVa(exe, th07::kTh07ScreenEffectShakeFunctionAddress, {0x55, 0x8b, 0xec});
+    CheckPeBytesAtVa(exe, th07::kTh07ClearBonusFunctionAddress, {0x55, 0x8b, 0xec});
+    CheckPeBytesAtVa(exe, th07::kTh07StageClearBonusInstructionAddress, {0x69, 0xc0, 0x40, 0x42, 0x0f, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07PointItemClearBonusInstructionAddress, {0x69, 0xc0, 0x50, 0xc3, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07GrazeClearBonusInstructionAddress, {0x69, 0xc0, 0xf4, 0x01, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07CherryClearBonusInstructionAddress, {0x6b, 0xc0, 0x0a});
+    CheckPeBytesAtVa(exe, th07::kTh07LifeClearBonusInstructionAddress, {0x69, 0xc0, 0x00, 0x2d, 0x31, 0x01});
+    CheckPeBytesAtVa(exe, th07::kTh07BombClearBonusInstructionAddress, {0x69, 0xc0, 0x00, 0x09, 0x3d, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07ClearBonusSummaryVisibleCheckAddress,
+                     {0x83, 0xb8, 0xb4, 0x09, 0x02, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07ClearBonusPointItemsLoadAddress,
+                     {0x8b, 0x80, 0x24, 0x0a, 0x02, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07ClearBonusGrazeLoadAddress,
+                     {0x8b, 0x80, 0x2c, 0x0a, 0x02, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07ClearBonusCherryLoadAddress,
+                     {0x8b, 0x80, 0x28, 0x0a, 0x02, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07ClearBonusTotalScorePushAddress,
+                     {0xff, 0xb0, 0xb8, 0x09, 0x02, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07BonusPopupVisibleCheckAddress,
+                     {0x83, 0xb8, 0xd0, 0x09, 0x02, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07BonusPopupScorePushAddress,
+                     {0xff, 0xb0, 0xcc, 0x09, 0x02, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07BonusPopupPositionAddAddress,
+                     {0x05, 0xc0, 0x09, 0x02, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07BonusToastKindLoadAddress,
+                     {0x8b, 0x80, 0xf0, 0x09, 0x02, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07BonusToastRegisterFunctionAddress, {0x55, 0x8b, 0xec});
+    CheckPeBytesAtVa(exe, th07::kTh07BonusToastRegisterPositionXLoadAddress,
+                     {0xd9, 0x05, 0x74, 0x8a, 0x49, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07BonusToastRegisterPositionYLoadAddress,
+                     {0xd9, 0x05, 0x30, 0x8b, 0x49, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07BonusToastRegisterPositionAddAddress,
+                     {0x81, 0xc7, 0xe0, 0x09, 0x02, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07BonusToastRegisterKindWriteAddress,
+                     {0x89, 0x88, 0xf0, 0x09, 0x02, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07BonusToastRegisterTimerAddAddress,
+                     {0x05, 0xf4, 0x09, 0x02, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07BonusToastRegisterTimerCurrentClearAddress,
+                     {0x83, 0x60, 0x08, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07BonusToastRegisterTimerSubframeClearAddress,
+                     {0xd9, 0xee, 0xd9, 0x58, 0x04});
+    CheckPeBytesAtVa(exe, th07::kTh07BonusToastRegisterTimerPreviousWriteAddress,
+                     {0xc7, 0x00, 0x19, 0xfc, 0xff, 0xff});
+    CheckPeBytesAtVa(exe, th07::kTh07BonusToastRegisterScoreWriteAddress,
+                     {0x89, 0x88, 0xec, 0x09, 0x02, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07BonusToastRegisterGlobalStateWriteAddress,
+                     {0xc7, 0x05, 0xb4, 0x5a, 0x57, 0x00, 0x02, 0x00, 0x00, 0x00});
+    for (const th07::BonusToastProducerCall &producer : th07::kTh07BonusToastProducerCalls) {
+        CheckPeNearCallTargetAtVa(exe, producer.callAddress, th07::kTh07BonusToastRegisterFunctionAddress);
+        CheckPeBytesAtVa(exe, producer.kindPushAddress,
+                         {0x6a, static_cast<std::uint8_t>(producer.kind)});
+        if (producer.scoreIsImmediate) {
+            CheckPeBytesAtVa(exe, producer.scorePushAddress,
+                             {0x6a, static_cast<std::uint8_t>(producer.scoreImmediate)});
+        }
+    }
+    CheckPeBytesAtVa(exe, th07::kTh07BonusToastCherryPointMaxPrimaryScorePushAddress, {0x51});
+    CheckPeBytesAtVa(exe, th07::kTh07BonusToastCherryPointMaxSecondaryScorePushAddress, {0x51});
+    CheckPeBytesAtVa(exe, th07::kTh07BonusToastBorderBonusScorePushAddress, {0x50});
+    CheckPeBytesAtVa(exe, 0x0041671d, {0xb9, 0x70, 0x62, 0x62, 0x00});
+    CheckPeNearCallTargetAtVa(exe, th07::kTh07CherryEclOpcode160CallAddress,
+                              th07::kTh07CherryPrimaryGainFunctionAddress);
+    for (const th07::CherryGainHelperContract &contract : th07::kTh07CherryGainHelperContracts) {
+        CheckPeBytesAtVa(exe, contract.functionAddress, {0x55, 0x8b, 0xec});
+        CheckPeBytesAtVa(exe, contract.currentWriteAddress, {0x89, 0x81, 0x1c, 0x96, 0x00, 0x00});
+        CheckPeBytesAtVa(exe, contract.capCompareAddress, {0x3b, 0x81, 0x18, 0x96, 0x00, 0x00});
+        CheckPeBytesAtVa(exe, contract.capClampWriteAddress, {0x89, 0x88, 0x1c, 0x96, 0x00, 0x00});
+        CheckPeBytesAtVa(exe, contract.toastKindPushAddress, {0x6a, contract.toastKind});
+        CheckPeBytesAtVa(exe, contract.toastScorePushAddress, {0x51});
+        CheckPeBytesAtVa(exe, contract.toastCallAddress - 5, {0xb9, 0xf0, 0xfb, 0x49, 0x00});
+        CheckPeNearCallTargetAtVa(exe, contract.toastCallAddress,
+                                  contract.toastRegisterFunctionAddress);
+        if (contract.updatesCherryPlus) {
+            CheckPeBytesAtVa(exe, 0x0042f5f7, {0x0f, 0xbe, 0x05, 0xe5, 0xfe, 0x4b, 0x00});
+            CheckPeBytesAtVa(exe, contract.cherryPlusWriteAddress,
+                             {0x89, 0x81, 0x20, 0x96, 0x00, 0x00});
+            CheckPeBytesAtVa(exe, 0x0042f623, {0x05, 0x50, 0xc3, 0x00, 0x00});
+            CheckPeBytesAtVa(exe, 0x0042f63f, {0x05, 0x50, 0xc3, 0x00, 0x00});
+            CheckPeBytesAtVa(exe, contract.cherryPlusClampWriteAddress,
+                             {0x89, 0x81, 0x20, 0x96, 0x00, 0x00});
+            CheckPeBytesAtVa(exe, contract.borderStartCallAddress - 5,
+                             {0xb9, 0xd8, 0xda, 0x4b, 0x00});
+            CheckPeNearCallTargetAtVa(exe, contract.borderStartCallAddress,
+                                      contract.borderStartFunctionAddress);
+        }
+        else {
+            assert(contract.cherryPlusWriteAddress == th07::kTh07CherryNoInstructionAddress);
+            assert(contract.borderStartCallAddress == th07::kTh07CherryNoInstructionAddress);
+        }
+    }
+    CheckPeBytesAtVa(exe, th07::kTh07BonusToastUpdateFunctionAddress, {0x55, 0x8b, 0xec});
+    CheckPeBytesAtVa(exe, th07::kTh07BonusToastUpdateVisibleCheckAddress,
+                     {0x83, 0xb8, 0xf0, 0x09, 0x02, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07BonusToastUpdateTimerCurrentCompareAddress,
+                     {0x83, 0xb8, 0xfc, 0x09, 0x02, 0x00, 0x1e});
+    CheckPeBytesAtVa(exe, th07::kTh07BonusToastUpdateTimerAddAddress,
+                     {0x05, 0xf4, 0x09, 0x02, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07BonusToastUpdatePositionXWriteAddress,
+                     {0xd9, 0x98, 0xe0, 0x09, 0x02, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07BonusToastUpdateFinalPositionXLoadAddress,
+                     {0xd9, 0x05, 0xb8, 0x8b, 0x49, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07BonusToastUpdateFinalPositionXWriteAddress,
+                     {0xd9, 0x98, 0xe0, 0x09, 0x02, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07BonusToastUpdateExpireCompareAddress,
+                     {0x81, 0xb8, 0xfc, 0x09, 0x02, 0x00, 0xb4, 0x00, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07BonusToastUpdateKindClearAddress,
+                     {0x83, 0xa0, 0xf0, 0x09, 0x02, 0x00, 0x00});
+    CheckPeNearCallTargetAtVa(exe, th07::kTh07BonusToastUpdateTimerCallAddress,
+                              th07::kTh07BonusToastUpdateTimerCallTargetAddress);
+    CheckPeBytesAtVa(exe, th07::kTh07BonusToastInitKindClearAddress,
+                     {0x83, 0xa0, 0xf0, 0x09, 0x02, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07BonusToastFullPowerCompareAddress, {0x83, 0x7d, 0xc4, 0x01});
+    CheckPeBytesAtVa(exe, th07::kTh07BonusToastSupernaturalBorderCompareAddress,
+                     {0x83, 0x7d, 0xc4, 0x02});
+    CheckPeBytesAtVa(exe, th07::kTh07BonusToastCherryPointMaxCompareAddress,
+                     {0x83, 0x7d, 0xc4, 0x03});
+    CheckPeBytesAtVa(exe, th07::kTh07BonusToastBorderBonusCompareAddress,
+                     {0x83, 0x7d, 0xc4, 0x04});
+    CheckPeBytesAtVa(exe, th07::kTh07BonusToastFullPowerColorWriteAddress,
+                     {0xc7, 0x05, 0xd8, 0x42, 0x35, 0x01, 0xff, 0xb0, 0xc0, 0xff});
+    CheckPePushImmediateAtVa(exe, th07::kTh07BonusToastFullPowerStringPushAddress,
+                             th07::kTh07FullPowerModeStringAddress);
+    CheckPeBytesAtVa(exe, th07::kTh07BonusToastFullPowerPositionAddAddress,
+                     {0x05, 0xe0, 0x09, 0x02, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07BonusToastSupernaturalScaleLoadAddress,
+                     {0xd9, 0x05, 0x20, 0x8b, 0x49, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07BonusToastSupernaturalRenderModeWriteAddress,
+                     {0xc7, 0x05, 0xf0, 0x42, 0x35, 0x01, 0x0b, 0x00, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07BonusToastSupernaturalColorWriteAddress,
+                     {0xc7, 0x05, 0xd8, 0x42, 0x35, 0x01, 0xff, 0xb0, 0xe0, 0xff});
+    CheckPePushImmediateAtVa(exe, th07::kTh07BonusToastSupernaturalStringPushAddress,
+                             th07::kTh07SupernaturalBorderStringAddress);
+    CheckPeBytesAtVa(exe, th07::kTh07BonusToastSupernaturalPositionAddAddress,
+                     {0x05, 0xe0, 0x09, 0x02, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07BonusToastSupernaturalRenderModeResetAddress,
+                     {0xc7, 0x05, 0xf0, 0x42, 0x35, 0x01, 0x0e, 0x00, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07BonusToastCherryPointMaxColorWriteAddress,
+                     {0xc7, 0x05, 0xd8, 0x42, 0x35, 0x01, 0xff, 0xb0, 0xc0, 0xff});
+    CheckPePushImmediateAtVa(exe, th07::kTh07BonusToastCherryPointMaxStringPushAddress,
+                             th07::kTh07CherryPointMaxStringAddress);
+    CheckPeBytesAtVa(exe, th07::kTh07BonusToastCherryPointMaxPositionAddAddress,
+                     {0x05, 0xe0, 0x09, 0x02, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07BonusToastBorderBonusScaleLoadAddress,
+                     {0xd9, 0x05, 0x20, 0x8b, 0x49, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07BonusToastBorderBonusRenderModeWriteAddress,
+                     {0xc7, 0x05, 0xf0, 0x42, 0x35, 0x01, 0x0b, 0x00, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07BonusToastBorderBonusColorWriteAddress,
+                     {0xc7, 0x05, 0xd8, 0x42, 0x35, 0x01, 0xff, 0xb0, 0xe0, 0xff});
+    CheckPeBytesAtVa(exe, th07::kTh07BonusToastPositionAddAddress,
+                     {0x05, 0xe0, 0x09, 0x02, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07BorderBonusScorePushAddress,
+                     {0xff, 0xb0, 0xec, 0x09, 0x02, 0x00});
+    CheckPePushImmediateAtVa(exe, th07::kTh07BonusToastBorderBonusStringPushAddress,
+                             th07::kTh07BorderBonusStringAddress);
+    CheckPeBytesAtVa(exe, th07::kTh07BonusToastBorderBonusPositionAddAddress,
+                     {0x05, 0xe0, 0x09, 0x02, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07BonusToastBorderBonusRenderModeResetAddress,
+                     {0xc7, 0x05, 0xf0, 0x42, 0x35, 0x01, 0x0e, 0x00, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07SpellCardBonusVisibleCheckAddress,
+                     {0x83, 0xb8, 0x10, 0x0a, 0x02, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07SpellCardBonusPositionWriteAddress,
+                     {0xd9, 0x98, 0x00, 0x0a, 0x02, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07SpellCardBonusLineYWriteAddress,
+                     {0xd9, 0x98, 0x04, 0x0a, 0x02, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07SpellCardBonusCaptureIdPushAddress,
+                     {0xff, 0xb0, 0x0c, 0x0a, 0x02, 0x00});
+    assert(ReadPeCStringAtVa(exe, th07::kTh07StageClearStringAddress) == "Stage Clear");
+    assert(ReadPeCStringAtVa(exe, th07::kTh07AllClearStringAddress) == "All Clear!");
+    assert(ReadPeCStringAtVa(exe, th07::kTh07ClearBonusClearStringAddress) == "Clear  = %8d");
+    assert(ReadPeCStringAtVa(exe, th07::kTh07ClearBonusPointStringAddress) == "Point  = %8d");
+    assert(ReadPeCStringAtVa(exe, th07::kTh07ClearBonusGrazeStringAddress) == "Graze  = %8d");
+    assert(ReadPeCStringAtVa(exe, th07::kTh07ClearBonusCherryStringAddress) == "Cherry = %8d");
+    assert(ReadPeCStringAtVa(exe, th07::kTh07ClearBonusPlayerStringAddress) == "Player =%9d");
+    assert(ReadPeCStringAtVa(exe, th07::kTh07ClearBonusBombStringAddress) == "Bomb   = %8d");
+    assert(ReadPeCStringAtVa(exe, th07::kTh07ClearBonusTotalStringAddress) == "Total = %8d0");
+    assert(ReadPeCStringAtVa(exe, th07::kTh07ClearBonusSpellCardStringAddress) == "Spell Card Bonus!");
+    assert(ReadPeCStringAtVa(exe, th07::kTh07FullPowerModeStringAddress) == "Full Power Mode!");
+    assert(ReadPeCStringAtVa(exe, th07::kTh07CherryPointMaxStringAddress) == "CherryPoint Max!");
+    assert(ReadPeCStringAtVa(exe, th07::kTh07CherryValueStringAddress) == "Cherry = %8d");
+    assert(ReadPeCStringAtVa(exe, th07::kTh07BorderBonusStringAddress) == "Border Bonus %7d");
+    assert(ReadPeCStringAtVa(exe, th07::kTh07SupernaturalBorderStringAddress) == "Supernatural Border!!");
+    assert(ReadPeCStringAtVa(exe, th07::kTh07PlayerPenaltyLowStringAddress) == "Player Penalty*0.2");
+    assert(ReadPeCStringAtVa(exe, th07::kTh07PlayerPenaltyHalfStringAddress) == "Player Penalty*0.5");
+    assert(ReadPeCStringAtVa(exe, th07::kTh07PhantasmRankStringAddress) == "Phantasm Rank*2.0");
+    CheckPeBytesAtVa(exe, th07::kTh07GuiSpellcardSetupFunctionAddress, {0x55, 0x8b, 0xec});
+    CheckPeBytesAtVa(exe, th07::kTh07GuiSpellcardPlayerPortraitVmAddAddress,
+                     {0x05, 0x4c, 0x57, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07GuiSpellcardPlayerPortraitScriptWriteAddress,
+                     {0x66, 0xc7, 0x80, 0xd8, 0x01, 0x00, 0x00, 0xa1, 0x04});
+    CheckPeBytesAtVa(exe, th07::kTh07GuiSpellcardPlayerPortraitActiveSpriteAddAddress,
+                     {0x05, 0x4c, 0x57, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07GuiSpellcardEnemyNameVmAddAddress,
+                     {0x05, 0xe4, 0x5b, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07GuiSpellcardEnemyNameScriptWriteAddress,
+                     {0x66, 0xc7, 0x80, 0xd8, 0x01, 0x00, 0x00, 0xa4, 0x04});
+    CheckPeBytesAtVa(exe, th07::kTh07GuiSpellcardEnemyNameActiveSpritePushAddress,
+                     {0x68, 0xac, 0x04, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07GuiSpellcardEnemyNameCopyVmAddAddress,
+                     {0x05, 0x7c, 0x60, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07GuiSpellcardEnemyNameCopyScriptWriteAddress,
+                     {0x66, 0xc7, 0x80, 0xd8, 0x01, 0x00, 0x00, 0xa6, 0x04});
+    CheckPeBytesAtVa(exe, th07::kTh07GuiSpellcardEnemyNameCopyActiveSpritePushAddress,
+                     {0x68, 0xac, 0x04, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07GuiSpellcardTextVmAddAddress,
+                     {0x05, 0x14, 0x65, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07GuiSpellcardTextScriptWriteAddress,
+                     {0x66, 0xc7, 0x80, 0xd8, 0x01, 0x00, 0x00, 0x04, 0x07});
+    CheckPeBytesAtVa(exe, th07::kTh07GuiSpellcardTextColorPushAddress,
+                     {0x68, 0xff, 0xf0, 0xf0, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07GuiSpellcardTextInitVmAddAddress,
+                     {0x05, 0x14, 0x65, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07GuiSpellcardTextWidthWriteAddress, {0xd9, 0x58, 0x0c});
+    CheckPeBytesAtVa(exe, th07::kTh07GuiSpellcardInterruptVmAddAddress,
+                     {0x05, 0xac, 0x69, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07GuiSpellcardInterruptWriteAddress,
+                     {0x66, 0xc7, 0x80, 0xc6, 0x01, 0x00, 0x00, 0x01, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07GuiSpellcardSoundPushAddress, {0x6a, 0x0e});
+    CheckPeBytesAtVa(exe, th07::kTh07GuiSpellcardGlobalStateWriteAddress,
+                     {0xc7, 0x05, 0xb4, 0x5a, 0x57, 0x00, 0x02, 0x00, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07GuiRunMsgFunctionAddress, {0x55, 0x8b, 0xec});
+    CheckPeBytesAtVa(exe, th07::kTh07GuiMsgOpcodeMaxCompareAddress,
+                     {0x83, 0x7d, 0x84, th07::kTh07GuiMsgOpcodeScreenFade});
+    for (const th07::Th07GuiMsgOpcodeCase &opcodeCase : th07::kTh07GuiMsgOpcodeCases) {
+        assert(ReadPeU32AtVa(exe,
+                             th07::kTh07GuiMsgOpcodeSwitchTableAddress +
+                                 static_cast<std::uint32_t>(opcodeCase.opcode * 4)) ==
+               opcodeCase.caseAddress);
+    }
+    CheckPeBytesAtVa(exe, th07::kTh07GuiMsgOpcode00CaseAddress, {0x8b, 0x45, 0x88});
+    CheckPeBytesAtVa(exe, th07::kTh07GuiMsgOpcode01CaseAddress, {0x8b, 0x45, 0x88});
+    CheckPeBytesAtVa(exe, th07::kTh07GuiMsgOpcode02CaseAddress, {0x8b, 0x45, 0x88});
+    CheckPeBytesAtVa(exe, th07::kTh07GuiMsgPortraitScriptEnemyOffsetAndAddress,
+                     {0x83, 0xe0, static_cast<std::uint8_t>(th07::kTh07GuiMsgPortraitScriptEnemyOffset)});
+    CheckPeBytesAtVa(exe, th07::kTh07GuiMsgPortraitScriptBaseAddAddress,
+                     {0x05,
+                      static_cast<std::uint8_t>(th07::kTh07GuiMsgPortraitScriptBase),
+                      static_cast<std::uint8_t>(th07::kTh07GuiMsgPortraitScriptBase >> 8),
+                      0x00,
+                      0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07GuiMsgPortraitSpriteEnemyOffsetAndAddress,
+                     {0x83, 0xe1, static_cast<std::uint8_t>(th07::kTh07GuiMsgPortraitSpriteEnemyOffset)});
+    CheckPeBytesAtVa(exe, th07::kTh07GuiMsgPortraitSpriteBaseAddAddress,
+                     {0x81,
+                      0xc1,
+                      static_cast<std::uint8_t>(th07::kTh07GuiMsgPortraitScriptBase),
+                      static_cast<std::uint8_t>(th07::kTh07GuiMsgPortraitScriptBase >> 8),
+                      0x00,
+                      0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07GuiMsgOpcode03CaseAddress, {0x8b, 0x45, 0x88});
+    CheckPeBytesAtVa(exe, th07::kTh07GuiMsgOpcode04CaseAddress, {0x8b, 0x45, 0x88});
+    CheckPeBytesAtVa(exe, th07::kTh07GuiMsgOpcode05CaseAddress, {0x8b, 0x45, 0x88});
+    CheckPeBytesAtVa(exe, th07::kTh07GuiMsgOpcode06CaseAddress, {0x8b, 0x45, 0x88});
+    CheckPeBytesAtVa(exe, th07::kTh07GuiMsgOpcode07CaseAddress, {0x83, 0x3d, 0x5c, 0xf8, 0x62, 0x00, 0x06});
+    CheckPeBytesAtVa(exe, th07::kTh07GuiMsgOpcode08CaseAddress, {0x8b, 0x45, 0x88});
+    CheckPeBytesAtVa(exe, th07::kTh07GuiMsgOpcode09CaseAddress, {0xa1, 0x78, 0x62, 0x62, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07GuiMsgOpcode10CaseAddress, {0xe9, 0x44, 0x02, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07GuiMsgOpcode11CaseAddress, {0x83, 0x25, 0x08, 0x5c, 0x57, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07GuiMsgOpcode12CaseAddress,
+                     {0xd9, 0x05, 0xa8, 0x8a, 0x49, 0x00});
+    assert(ReadPeU32AtVa(exe, th07::kTh07GuiMsgOpcode12DurationConstantAddress) ==
+           th07::kTh07GuiMsgOpcode12DurationBits);
+    CheckPeBytesAtVa(exe, th07::kTh07GuiMsgOpcode12SupervisorThisMovAddress,
+                     {0xb9, 0x50, 0x59, 0x57, 0x00});
+    CheckPeNearCallTargetAtVa(exe,
+                              th07::kTh07GuiMsgOpcode12FadeOutCallAddress,
+                              th07::kTh07SupervisorFadeOutMusicFunctionAddress);
+    CheckPeBytesAtVa(exe, th07::kTh07GuiMsgOpcode13ArgReadAddress, {0x8a, 0x40, 0x04});
+    CheckPeBytesAtVa(exe, th07::kTh07GuiMsgOpcode13SkippableWriteAddress,
+                     {0x88, 0x81, 0xb0, 0x09, 0x02, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07GuiMsgOpcode14CaseAddress, {0x6a, 0x00, 0x6a, 0x00});
+    CheckPePushImmediateAtVa(exe, th07::kTh07GuiMsgOpcode14ScreenEffectColorPushAddress,
+                             th07::kTh07GuiMsgOpcodeScreenFadeColor);
+    CheckPeMovEdxImmediateAtVa(exe, th07::kTh07GuiMsgOpcode14ScreenEffectDurationMovAddress,
+                               th07::kTh07GuiMsgOpcodeScreenFadeDurationFrames);
+    CheckPeBytesAtVa(exe, th07::kTh07GuiMsgOpcode14ScreenEffectKindAddress,
+                     {0x6a, static_cast<std::uint8_t>(th07::kTh07GuiMsgOpcodeScreenFadeEffectKind),
+                      0x59});
+    CheckPeNearCallTargetAtVa(exe, th07::kTh07GuiMsgOpcode14ScreenEffectCallAddress,
+                              th07::kTh07ScreenEffectRegisterChainFunctionAddress);
+    CheckPeBytesAtVa(exe, th07::kTh07GuiMsgOpcode14GlobalStateWriteAddress,
+                     {0xc7, 0x05, 0xb4, 0x5a, 0x57, 0x00, 0x92, 0x01, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07GuiMsgAdvanceInstructionAddress,
+                     {0x8b, 0x45, 0x88, 0x8b, 0x80, 0xa8, 0xfb, 0x01, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07GuiMsgTimerTickPathAddress,
+                     {0x8b, 0x4d, 0x88, 0x81, 0xc1, 0xb0, 0xfb, 0x01, 0x00});
+    CheckPeNearCallTargetAtVa(exe, th07::kTh07GuiMsgTimerTickCallAddress,
+                              th07::kTh07GuiMsgTimerTickFunctionAddress);
+    CheckPeBytesAtVa(exe, th07::kTh07GuiMsgPostTickPathAddress,
+                     {0x8b, 0x45, 0x88, 0x05, 0xc0, 0xfb, 0x01, 0x00});
+    CheckPeNearCallTargetAtVa(exe, th07::kTh07GuiMsgAnmVmTickFirstCallAddress,
+                              th07::kTh07GuiMsgAnmVmTickFunctionAddress);
+    CheckPeBytesAtVa(exe, th07::kTh07GuiScoreUpdateFunctionAddress, {0x55, 0x8b, 0xec});
+    CheckPeBytesAtVa(exe, th07::kTh07GuiScoreMaxClampInstructionAddress,
+                     {0xc7, 0x40, 0x04, 0xff, 0xc9, 0x9a, 0x3b});
+    CheckPeBytesAtVa(exe, th07::kTh07GuiScoreStepShiftInstructionAddress, {0xc1, 0xe8, 0x05});
+    CheckPeBytesAtVa(exe, th07::kTh07GuiScoreStepMaxCompareInstructionAddress,
+                     {0x81, 0x7d, 0xf4, 0x5e, 0xd5, 0x08, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07GuiScoreStepMaxWriteInstructionAddress,
+                     {0xc7, 0x45, 0xf4, 0x5e, 0xd5, 0x08, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07GuiScoreStepMinWriteInstructionAddress,
+                     {0xc7, 0x45, 0xf4, 0x01, 0x00, 0x00, 0x00});
+    assert(ReadPeU32AtVa(exe, th07::kTh07GuiScoreMaxImmediateAddress) == th07::kTh07GuiScoreMax);
+    assert(ReadPeU32AtVa(exe, th07::kTh07GuiScoreStepMaxCompareImmediateAddress) ==
+           th07::kTh07GuiScoreStepMax);
+    assert(ReadPeU32AtVa(exe, th07::kTh07GuiScoreStepMaxWriteImmediateAddress) ==
+           th07::kTh07GuiScoreStepMax);
+    assert(ReadPeU32AtVa(exe, th07::kTh07GuiScoreStepMinWriteImmediateAddress) ==
+           th07::kTh07GuiScoreStepMin);
+    CheckPeBytesAtVa(exe, th07::kTh07HighScoreCompareInstructionAddress,
+                     {0x8b, 0x40, static_cast<std::uint8_t>(th07::kTh07HighScoreFieldOffset), 0x3b, 0x01});
+    CheckPeBytesAtVa(exe, th07::kTh07HighScoreWriteInstructionAddress,
+                     {0x89, 0x41, static_cast<std::uint8_t>(th07::kTh07HighScoreFieldOffset)});
+    CheckPeBytesAtVa(exe, th07::kTh07HighScoreShotCopyReadInstructionAddress,
+                     {0x8a, 0x40, static_cast<std::uint8_t>(th07::kTh07CurrentShotTypeFieldOffset)});
+    CheckPeBytesAtVa(exe, th07::kTh07HighScoreShotCopyWriteInstructionAddress,
+                     {0x88, 0x41, static_cast<std::uint8_t>(th07::kTh07HighScoreShotTypeFieldOffset)});
+    CheckPeBytesAtVa(exe, th07::kTh07ExtendAwardFunctionAddress, {0x55, 0x8b, 0xec});
+    CheckPeBytesAtVa(exe, th07::kTh07ExtendAwardLifeStockReadAddress,
+                     {0xd9, 0x40, static_cast<std::uint8_t>(th07::kTh07ExtendLifeStockFieldOffset)});
+    CheckPeBytesAtVa(exe, th07::kTh07ExtendAwardLifeStockCompareAddress,
+                     {0x83, 0xf8, static_cast<std::uint8_t>(th07::kTh07ExtendStockMaxExclusive)});
+    CheckPeNearCallTargetAtVa(exe, th07::kTh07ExtendAwardLifeAddCallAddress,
+                              th07::kTh07AddLifeFunctionAddress);
+    CheckPeBytesAtVa(exe, th07::kTh07ExtendAwardLifeSoundPushAddress,
+                     {0x6a, static_cast<std::uint8_t>(th07::kTh07ExtendSoundIndex)});
+    CheckPePushImmediateAtVa(exe, th07::kTh07ExtendAwardLifeNotificationDurationPushAddress,
+                             th07::kTh07ExtendNotificationDurationFrames);
+    CheckPeBytesAtVa(exe, th07::kTh07ExtendAwardLifeFlagAndAddress, {0x83, 0xe0, 0xfc});
+    CheckPeBytesAtVa(exe, th07::kTh07ExtendAwardLifeFlagOrAddress,
+                     {0x83, 0xc8, static_cast<std::uint8_t>(th07::kTh07ExtendLifeNotificationFlagBits)});
+    CheckPeBytesAtVa(exe, th07::kTh07ExtendAwardLifeFlagWriteAddress, {0xa3, 0xf4, 0xfb, 0x49, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07ExtendAwardBombStockReadAddress,
+                     {0xd9, 0x40, static_cast<std::uint8_t>(th07::kTh07ExtendBombStockFieldOffset)});
+    CheckPeBytesAtVa(exe, th07::kTh07ExtendAwardBombStockCompareAddress,
+                     {0x83, 0xf8, static_cast<std::uint8_t>(th07::kTh07ExtendStockMaxExclusive)});
+    CheckPeNearCallTargetAtVa(exe, th07::kTh07ExtendAwardBombAddCallAddress,
+                              th07::kTh07AddBombFunctionAddress);
+    CheckPeBytesAtVa(exe, th07::kTh07ExtendAwardBombSoundPushAddress,
+                     {0x6a, static_cast<std::uint8_t>(th07::kTh07ExtendSoundIndex)});
+    CheckPePushImmediateAtVa(exe, th07::kTh07ExtendAwardBombNotificationDurationPushAddress,
+                             th07::kTh07ExtendNotificationDurationFrames);
+    CheckPeBytesAtVa(exe, th07::kTh07ExtendAwardBombFlagAndAddress, {0x83, 0xe0, 0xf3});
+    CheckPeBytesAtVa(exe, th07::kTh07ExtendAwardBombFlagOrAddress,
+                     {0x83, 0xc8, static_cast<std::uint8_t>(th07::kTh07ExtendBombNotificationFlagBits)});
+    CheckPeBytesAtVa(exe, th07::kTh07ExtendAwardBombFlagWriteAddress, {0xa3, 0xf4, 0xfb, 0x49, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07ItemCollectionFunctionAddress, {0x55, 0x8b, 0xec});
+    CheckPeBytesAtVa(exe, th07::kTh07PointItemExtendDifficultyCompareAddress,
+                     {0x83, 0x3d, 0x80, 0x62, 0x62, 0x00,
+                      static_cast<std::uint8_t>(th07::kTh07PointItemExtendNormalDifficultyCount)});
+    CheckPeBytesAtVa(exe, th07::kTh07PointItemExtendNormalEarlyCompareAddress,
+                     {0x83, 0x78,
+                      static_cast<std::uint8_t>(th07::kTh07PointItemExtendCountFieldOffset),
+                      static_cast<std::uint8_t>(th07::kTh07PointItemExtendNormalEarlyCountLimit)});
+    CheckPeBytesAtVa(exe, th07::kTh07PointItemExtendNormalEarlyScaleAddress,
+                     {0x6b, 0xd2,
+                      static_cast<std::uint8_t>(th07::kTh07PointItemExtendNormalEarlyStep)});
+    CheckPeBytesAtVa(exe, th07::kTh07PointItemExtendNormalEarlyBaseAddAddress,
+                     {0x83, 0xc2,
+                      static_cast<std::uint8_t>(th07::kTh07PointItemExtendNormalEarlyBase)});
+    CheckPeBytesAtVa(exe, th07::kTh07PointItemExtendNormalMidCompareAddress,
+                     {0x83, 0x79,
+                      static_cast<std::uint8_t>(th07::kTh07PointItemExtendCountFieldOffset),
+                      static_cast<std::uint8_t>(th07::kTh07PointItemExtendNormalMidCountLimit)});
+    CheckPeBytesAtVa(exe, th07::kTh07PointItemExtendNormalMidScaleAddress,
+                     {0x69, 0xc0, 0x96, 0x00, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07PointItemExtendNormalMidBaseAddAddress,
+                     {0x05, 0x2c, 0x01, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07PointItemExtendNormalLateScaleAddress,
+                     {0x69, 0xc0, 0xc8, 0x00, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07PointItemExtendNormalLateBaseAddAddress,
+                     {0x05, 0x20, 0x03, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07PointItemExtendExtraFirstWriteAddress,
+                     {0xc7, 0x40,
+                      static_cast<std::uint8_t>(th07::kTh07PointItemExtendNextThresholdFieldOffset),
+                      0xc8, 0x00, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07PointItemExtendExtraSecondWriteAddress,
+                     {0xc7, 0x42,
+                      static_cast<std::uint8_t>(th07::kTh07PointItemExtendNextThresholdFieldOffset),
+                      0xf4, 0x01, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07PointItemExtendExtraLateScaleAddress,
+                     {0x69, 0xc9, 0xf4, 0x01, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07PointItemExtendExtraLateBaseAddAddress,
+                     {0x81, 0xc1, 0x20, 0x03, 0x00, 0x00});
+    CheckPeBytesAtVa(exe, th07::kTh07PointItemExtendProgressCompareAddress,
+                     {0x8b, 0x50,
+                      static_cast<std::uint8_t>(th07::kTh07PointItemExtendProgressFieldOffset),
+                      0x3b, 0x51,
+                      static_cast<std::uint8_t>(th07::kTh07PointItemExtendNextThresholdFieldOffset)});
+    CheckPeNearCallTargetAtVa(exe, th07::kTh07PointItemExtendAwardCallAddress,
+                              th07::kTh07ExtendAwardFunctionAddress);
+    CheckPeNearCallTargetAtVa(exe, th07::kTh07LifeItemExtendAwardCallAddress,
+                              th07::kTh07ExtendAwardFunctionAddress);
     CheckPeBytesAtVa(exe, 0x0042e1bf, {0x8b, 0x80, 0xe8, 0x95, 0x00, 0x00});
     CheckPeBytesAtVa(exe, 0x0042e1c9, {0x89, 0x81, 0xe8, 0x95, 0x00, 0x00});
     CheckPeBytesAtVa(exe, 0x0042f3c9, {0xc7, 0x45, 0xfc, 0x70, 0x62, 0x62, 0x00});
@@ -762,6 +1654,17 @@ void CheckSyntheticFixture()
     assert(th07::kPlayerGrazeCollisionFunctionAddress == 0x0043e3b0);
     assert(th07::kPlayerItemBoxCollisionFunctionAddress == 0x0043e4e0);
     assert(th07::kPlayerLaserHitboxFunctionAddress == 0x0043e6b0);
+    assert(th07::kPlayerBombCollisionFunctionAddress == 0x0043e0a0);
+    assert(th07::kPlayerBombCollisionUpdateFunctionAddress == 0x00440940);
+    assert(th07::kPlayerBombCollisionRegisterRectFunctionAddress == 0x00441800);
+    assert(th07::kPlayerBombCollisionRegisterCircleFunctionAddress == 0x004418b0);
+    assert(th07::kPlayerBombCollisionBulletClearOffset == 0x09e8);
+    assert(th07::kPlayerBombCollisionBulletClearCount == 0x70);
+    assert(th07::kPlayerBombCollisionSlotArrayOffset == 0x17dc);
+    assert(th07::kPlayerBombCollisionSlotCount == 0x60);
+    assert(th07::kPlayerBombCollisionSlotStride == 0x20);
+    assert(th07::kPlayerBombCollisionSlotPayloadOffset == 0x1c);
+    assert(th07::kPlayerCollisionPayloadOffset == 0x2404);
     assert(th07::kPlayerVectorSize == 0x000c);
     assert(th07::kPlayerPositionXOffset == 0x0930);
     assert(th07::kPlayerPositionYOffset == 0x0934);
@@ -779,6 +1682,50 @@ void CheckSyntheticFixture()
     assert(th07::kPlayerRightOptionPositionOffset == 0x09c0);
     assert(th07::kPlayerMovementDeltaXOffset == 0x09cc);
     assert(th07::kPlayerMovementDeltaYOffset == 0x09d0);
+    assert(th07::kPlayerMovementDirectionStateOffset == 0x241c);
+    assert(th07::kPlayerMovementHorizontalSpeedOffset == 0x2420);
+    assert(th07::kPlayerMovementVerticalSpeedOffset == 0x2424);
+    assert(th07::kPlayerShotDataPointerOffset == 0x0b7e70);
+    assert(th07::kPlayerFocusedShotDataPointerOffset == 0x0b7e74);
+    assert(th07::kTh07ShtLoadFunctionAddress == 0x00442b70);
+    assert(th07::kTh07CurrentShotTypeGlobalAddress == 0x0062f647);
+    assert(th07::kTh07ShtUnfocusedPathTableAddress == 0x0049f530);
+    assert(th07::kTh07ShtFocusedPathTableAddress == 0x0049f548);
+    assert(th07::kTh07ShtPathStringAddresses[0] == 0x00496bb4);
+    assert(th07::kTh07ShtPathStringAddresses[6] == 0x00496b50);
+    assert(th07::FindTh07PlayerShotDataLoadContract(th07::Th07PlayerShotDataLoadKind::Unfocused)
+               ->ownerPointerOffset == th07::kPlayerShotDataPointerOffset);
+    assert(th07::FindTh07PlayerShotDataLoadContract(th07::Th07PlayerShotDataLoadKind::Focused)
+               ->ownerPointerOffset == th07::kPlayerFocusedShotDataPointerOffset);
+    assert(th07::kPlayerMovementInputWordAddress == 0x004b9e50);
+    assert(th07::kPlayerMovementAnmManagerAddress == 0x004b9e44);
+    assert(th07::kPlayerMovementTimerMultiplierGlobalAddress == 0x00575ac8);
+    assert(th07::kPlayerMovementPlayfieldMinXAddress == 0x0062f874);
+    assert(th07::kPlayerMovementPlayfieldMinYAddress == 0x0062f878);
+    assert(th07::kPlayerMovementPlayfieldSpanXAddress == 0x0062f87c);
+    assert(th07::kPlayerMovementPlayfieldSpanYAddress == 0x0062f880);
+    assert(th07::kPlayerShotUnfocusedOrthogonalSpeedOffset == 0x0024);
+    assert(th07::kPlayerShotFocusedOrthogonalSpeedOffset == 0x0028);
+    assert(th07::kPlayerShotUnfocusedDiagonalSpeedOffset == 0x002c);
+    assert(th07::kPlayerShotFocusedDiagonalSpeedOffset == 0x0030);
+    assert(th07::BuildTh07PlayerDirectionState(th07::kPlayerMovementInputMaskDown |
+                                               th07::kPlayerMovementInputMaskLeft) ==
+           th07::kPlayerDirectionStateDownLeft);
+    assert(th07::BuildTh07PlayerMovementVector(
+               th07::kPlayerMovementInputMaskFocus | th07::kPlayerMovementInputMaskDown |
+                   th07::kPlayerMovementInputMaskRight,
+               {4.0f, 2.0f, 3.0f, 1.0f})
+               .horizontalSpeed == 1.0f);
+    assert(th07::BuildTh07PlayerMovementVector(
+               th07::kPlayerMovementInputMaskFocus | th07::kPlayerMovementInputMaskDown |
+                   th07::kPlayerMovementInputMaskRight,
+               {4.0f, 2.0f, 3.0f, 1.0f})
+               .verticalSpeed == 1.0f);
+    assert(th07::kPlayerMovementInputContract.evidence == "FUN_0043ee50:23-163");
+    assert(th07::kPlayerMovementInputContract.playfieldSpanYAddress == 0x0062f880);
+    assert(th07::FindPlayerHorizontalAnimationTransitionContract(
+               th07::PlayerHorizontalAnimationTransitionKind::CenterFromRight)
+               ->scriptWriteAddress == th07::kPlayerMovementCenterFromRightScriptWriteAddress);
     assert(th07::kPlayerInitialZBits == 0x3efae148);
     assert(th07::kPlayerHitboxDepthBits == 0x40a00000);
     assert(th07::kPlayerGrazeBoxDepthBits == 0x40a00000);
@@ -2121,6 +3068,111 @@ void CheckSyntheticFixture()
     assert(mode3Effect.initialScaleBits == 0x3d800000);
     assert(mode3Effect.finalScaleBits == 0x3fa66666);
     assert(mode3Effect.activePointerOffset == 0x0b7e6c);
+    static_assert(th07::kPlayerModeEffectLifecycleContractCount == 4);
+    assert(th07::kPlayerModeEffectActiveFlagOffset == 0x02cc);
+    assert(th07::kPlayerModeEffectLifecycleNoInstruction == 0);
+    assert(th07::kPlayerModeEffectLifecycleNoEffectId == -1);
+    const th07::PlayerModeEffectLifecycleContract *mode4Replace =
+        th07::FindPlayerModeEffectLifecycleContract(
+            th07::PlayerModeEffectLifecycleKind::ReplaceTransitionEffect,
+            th07::kPlayerModeEnterMode4FunctionAddress,
+            th07::PlayerModeEffectPointerSlot::TransitionEffect);
+    assert(mode4Replace != nullptr);
+    assert(mode4Replace->activePointerOffset == 0x0b7e6c);
+    assert(mode4Replace->activeFlagWriteAddress == 0x00441a5e);
+    assert(mode4Replace->pointerClearAddress == th07::kPlayerModeEffectLifecycleNoInstruction);
+    assert(mode4Replace->spawnCallAddress == 0x00441aa4);
+    assert(mode4Replace->pointerStoreAddress == 0x00441b74);
+    assert(mode4Replace->effectId == th07::kPlayerModeTransitionEffectId);
+    assert(mode4Replace->spawnSlotArgument == 4);
+    assert(mode4Replace->spawnFlagArgument == 1);
+    const th07::PlayerModeEffectLifecycleContract *mode4ClearCommon =
+        th07::FindPlayerModeEffectLifecycleContract(
+            th07::PlayerModeEffectLifecycleKind::ClearCommonEffect,
+            th07::kPlayerModeEnterMode4FunctionAddress,
+            th07::PlayerModeEffectPointerSlot::CommonEffect);
+    assert(mode4ClearCommon != nullptr);
+    assert(mode4ClearCommon->activePointerOffset == 0x0b7e68);
+    assert(mode4ClearCommon->activeFlagWriteAddress == 0x00441a7a);
+    assert(mode4ClearCommon->pointerClearAddress == 0x00441a84);
+    assert(mode4ClearCommon->spawnCallAddress == th07::kPlayerModeEffectLifecycleNoInstruction);
+    assert(mode4ClearCommon->effectId == th07::kPlayerModeEffectLifecycleNoEffectId);
+    const th07::PlayerModeEffectLifecycleContract *mode3Replace =
+        th07::FindPlayerModeEffectLifecycleContract(
+            th07::PlayerModeEffectLifecycleKind::ReplaceTransitionEffect,
+            th07::kPlayerModeEnterMode3FunctionAddress,
+            th07::PlayerModeEffectPointerSlot::TransitionEffect);
+    assert(mode3Replace != nullptr);
+    assert(mode3Replace->activePointerOffset == 0x0b7e6c);
+    assert(mode3Replace->activeFlagWriteAddress == 0x00441bee);
+    assert(mode3Replace->pointerClearAddress == 0x00441bf8);
+    assert(mode3Replace->spawnCallAddress == 0x00441c19);
+    assert(mode3Replace->pointerStoreAddress == 0x00441d35);
+    assert(mode3Replace->effectId == th07::kPlayerModeTransitionEffectId);
+    const th07::PlayerModeEffectLifecycleContract *cleanupClear =
+        th07::FindPlayerModeEffectLifecycleContract(
+            th07::PlayerModeEffectLifecycleKind::ClearTransitionEffect,
+            th07::kPlayerModeCleanupFunctionAddress,
+            th07::PlayerModeEffectPointerSlot::TransitionEffect);
+    assert(cleanupClear != nullptr);
+    assert(cleanupClear->activePointerOffset == 0x0b7e6c);
+    assert(cleanupClear->activeFlagWriteAddress == 0x004417e1);
+    assert(cleanupClear->pointerClearAddress == 0x004417eb);
+    assert(cleanupClear->spawnCallAddress == th07::kPlayerModeEffectLifecycleNoInstruction);
+    assert(cleanupClear->effectId == th07::kPlayerModeEffectLifecycleNoEffectId);
+    static_assert(th07::kPlayerModeRuntimeBranchContractCount == 4);
+    assert(th07::kPlayerModeUpdateFunctionAddress == 0x00441330);
+    assert(th07::kPlayerModeDrawFunctionAddress == 0x004420b0);
+    assert(th07::kPlayerModeRuntimeNoInstruction == 0);
+    assert(th07::kPlayerModeRuntimeDefaultBranchState == 0xff);
+    const th07::PlayerModeRuntimeBranchContract *updateMode3 =
+        th07::FindPlayerModeRuntimeBranchContract(th07::PlayerModeRuntimeBranchKind::UpdateMode3);
+    assert(updateMode3 != nullptr);
+    assert(updateMode3->functionAddress == th07::kPlayerModeUpdateFunctionAddress);
+    assert(updateMode3->rawModeState == th07::kPlayerModeState3);
+    assert(updateMode3->dispatchInstructionAddress == 0x00441370);
+    assert(updateMode3->timerOwnerOffset == th07::kPlayerBombCommonEffectXOffset);
+    assert(updateMode3->timerCallAddress == 0x004413b7);
+    assert(updateMode3->timerFunctionAddress == th07::kTh07TimerDecrementFunctionAddress);
+    assert(updateMode3->durationCompareAddress == 0x004413c8);
+    assert(updateMode3->activePointerOffset == th07::kPlayerBombCommonEffectActivePointerOffset);
+    assert(updateMode3->activePointerCheckAddress == 0x0044137c);
+    assert(updateMode3->primaryColorWriteAddress == 0x0044145c);
+    assert(updateMode3->whiteColorWriteAddress == 0x0044146b);
+    assert(updateMode3->ownerStateWriteAddress == 0x004413fa);
+    assert(updateMode3->terminalFunctionAddress == th07::kPlayerModeRuntimeNoInstruction);
+    assert(updateMode3->stageColorCallAddress == th07::kPlayerModeRuntimeNoInstruction);
+    const th07::PlayerModeRuntimeBranchContract *updateMode4 =
+        th07::FindPlayerModeRuntimeBranchContract(th07::PlayerModeRuntimeBranchKind::UpdateMode4);
+    assert(updateMode4 != nullptr);
+    assert(updateMode4->rawModeState == th07::kPlayerModeState4);
+    assert(updateMode4->dispatchInstructionAddress == 0x00441484);
+    assert(updateMode4->timerCallAddress == 0x0044151f);
+    assert(updateMode4->activePointerOffset == th07::kPlayerModeTransitionEffectActivePointerOffset);
+    assert(updateMode4->activePointerCheckAddress == 0x00441490);
+    assert(updateMode4->ownerStateWriteAddress == 0x00441546);
+    assert(updateMode4->terminalFunctionAddress == th07::kPlayerModeCleanupFunctionAddress);
+    assert(updateMode4->stageColorCallAddress == th07::kPlayerStageColorWriteMode4UpdateCallAddress);
+    const th07::PlayerModeRuntimeBranchContract *updateDefault =
+        th07::FindPlayerModeRuntimeBranchContract(th07::PlayerModeRuntimeBranchKind::UpdateDefault);
+    assert(updateDefault != nullptr);
+    assert(updateDefault->rawModeState == th07::kPlayerModeRuntimeDefaultBranchState);
+    assert(updateDefault->dispatchInstructionAddress == 0x00441636);
+    assert(updateDefault->timerCallAddress == 0x00441660);
+    assert(updateDefault->timerFunctionAddress == th07::kTh07TickTimerFunctionAddress);
+    assert(updateDefault->ownerStateWriteAddress == 0x0044164b);
+    assert(updateDefault->durationCompareAddress == th07::kPlayerModeRuntimeNoInstruction);
+    const th07::PlayerModeRuntimeBranchContract *drawMode4 =
+        th07::FindPlayerModeRuntimeBranchContract(th07::PlayerModeRuntimeBranchKind::DrawMode4);
+    assert(drawMode4 != nullptr);
+    assert(drawMode4->functionAddress == th07::kPlayerModeDrawFunctionAddress);
+    assert(drawMode4->dispatchInstructionAddress == 0x0044223d);
+    assert(drawMode4->durationCompareAddress == 0x00442252);
+    assert(drawMode4->primaryColorWriteAddress == 0x00442280);
+    assert(drawMode4->whiteColorWriteAddress == 0x0044228f);
+    assert(drawMode4->stageColorCallAddress == th07::kPlayerStageColorWriteMode4DrawCallAddress);
+    assert(th07::FindPlayerModeRuntimeBranchContract(
+               static_cast<th07::PlayerModeRuntimeBranchKind>(99)) == nullptr);
     assert(th07::ComputePlayerBombBackdropColor(0, 300) == 0x80808080);
     assert(th07::ComputePlayerBombBackdropColor(30, 300) == 0x80585858);
     assert(th07::ComputePlayerBombBackdropColor(59, 300) == 0x80323232);
@@ -2252,6 +3304,7 @@ void CheckSyntheticFixture()
     assert(th07::kTh07GameManagerRegisterFunctionAddress == 0x0042f3c5);
     assert(th07::kTh07GameManagerCleanupFunctionAddress == 0x0042f2e4);
     assert(th07::kTh07ScreenEffectShakeFunctionAddress == 0x0044b0e0);
+    assert(th07::kTh07ScreenEffectRegisterChainFunctionAddress == 0x0044b310);
     assert(th07::kTh07ScreenShakeRequiredGameFrameCount == 2);
     assert(th07::kPlayerBombCommonEffectSpawnFunctionAddress == 0x0041c610);
     assert(th07::kPlayerBombCommonEffectManagerAddress == 0x012fe250);
@@ -2302,16 +3355,6 @@ void CheckSyntheticFixture()
     assert(mode3OwnerState.lockoutFrames == 0x28);
 }
 
-struct OriginalShtExpectation {
-    const char *filename;
-    th07::Th07ShotType shotType;
-    bool focused;
-    std::uintmax_t fileSize;
-    std::size_t shotRecords;
-    std::int32_t deathbombWindowFrames;
-    std::array<float, 10> tuningFloats;
-};
-
 void CheckOriginalFilesIfAvailable()
 {
     const std::filesystem::path extracted = th07::ExtractedReferenceRoot();
@@ -2320,36 +3363,22 @@ void CheckOriginalFilesIfAvailable()
         return;
     }
 
-    constexpr std::array<int, 9> kThresholds = {8, 16, 32, 48, 64, 80, 96, 128, 999};
     std::array<int, 6> spawnCallbackUsage = {};
     std::array<int, 6> updateCallbackUsage = {};
     std::array<int, 2> drawCallbackUsage = {};
     std::array<int, 3> collisionCallbackUsage = {};
+    std::size_t shotRecordCount = 0;
 
-    constexpr std::array<OriginalShtExpectation, 12> kExpected = {{
-        {"ply00a.sht", th07::Th07ShotType::ReimuA, false, 3280, 60, 15, {1.65f, 2.8f, 8.0f, 20.0f, 0.5f, 128.0f, 4.0f, 1.6f, 2.8284271f, 1.1313709f}},
-        {"ply00b.sht", th07::Th07ShotType::ReimuB, false, 3436, 63, 15, {1.65f, 2.8f, 8.0f, 20.0f, 0.5f, 128.0f, 4.0f, 1.6f, 2.8284271f, 1.1313709f}},
-        {"ply01a.sht", th07::Th07ShotType::MarisaA, false, 2604, 47, 8, {2.2f, 2.5f, 10.0f, 28.0f, 0.5f, 156.0f, 5.0f, 2.0f, 3.5355339f, 1.4142135f}},
-        {"ply01b.sht", th07::Th07ShotType::MarisaB, false, 2136, 38, 8, {2.2f, 2.5f, 10.0f, 28.0f, 0.5f, 156.0f, 5.0f, 2.0f, 3.5355339f, 1.4142135f}},
-        {"ply02a.sht", th07::Th07ShotType::SakuyaA, false, 4268, 79, 6, {2.2f, 6.0f, 8.0f, 20.0f, 0.33f, 128.0f, 4.0f, 2.2f, 2.8284271f, 1.555635f}},
-        {"ply02b.sht", th07::Th07ShotType::SakuyaB, false, 3748, 69, 6, {2.2f, 6.0f, 8.0f, 20.0f, 0.33f, 128.0f, 4.0f, 2.2f, 2.8284271f, 1.555635f}},
-        {"ply00as.sht", th07::Th07ShotType::ReimuA, true, 1928, 34, 15, {1.65f, 2.8f, 8.0f, 20.0f, 0.5f, 128.0f, 4.0f, 1.6f, 2.8284271f, 1.1313709f}},
-        {"ply00bs.sht", th07::Th07ShotType::ReimuB, true, 1564, 27, 15, {1.65f, 2.8f, 8.0f, 20.0f, 0.5f, 128.0f, 4.0f, 1.6f, 2.8284271f, 1.1313709f}},
-        {"ply01as.sht", th07::Th07ShotType::MarisaA, true, 1408, 24, 8, {2.2f, 2.5f, 10.0f, 28.0f, 0.5f, 156.0f, 5.0f, 2.0f, 3.5355339f, 1.4142135f}},
-        {"ply01bs.sht", th07::Th07ShotType::MarisaB, true, 1564, 27, 8, {2.2f, 2.5f, 10.0f, 28.0f, 0.5f, 156.0f, 5.0f, 2.0f, 3.5355339f, 1.4142135f}},
-        {"ply02as.sht", th07::Th07ShotType::SakuyaA, true, 2812, 51, 6, {2.2f, 6.0f, 8.0f, 20.0f, 0.33f, 128.0f, 4.0f, 2.2f, 2.8284271f, 1.555635f}},
-        {"ply02bs.sht", th07::Th07ShotType::SakuyaB, true, 3436, 63, 6, {2.2f, 6.0f, 8.0f, 20.0f, 0.33f, 128.0f, 4.0f, 2.2f, 2.8284271f, 1.555635f}},
-    }};
-
-    for (const OriginalShtExpectation &expected : kExpected) {
-        const th07::ShtFile file = th07::LoadShtFile(extracted / expected.filename);
+    for (const th07::Th07PlayerShotSummary &expected : th07::kTh07PlayerShotSummaries) {
+        const std::filesystem::path filePath = extracted / std::string(expected.fileName);
+        const th07::ShtFile file = th07::LoadShtFile(filePath);
         const th07::ShtFileBinding *binding = th07::FindShtFile(expected.shotType, expected.focused);
 
         assert(binding != nullptr);
-        assert(std::filesystem::path(std::string(binding->file.archivePath)).filename() == expected.filename);
-        assert(std::filesystem::file_size(extracted / expected.filename) == expected.fileSize);
+        assert(std::filesystem::path(std::string(binding->file.archivePath)).filename() == expected.fileName);
+        assert(std::filesystem::file_size(filePath) == expected.fileSize);
         assert(file.header.formatId == 0);
-        assert(file.header.powerLevelCount == 9);
+        assert(file.header.powerLevelCount == th07::kTh07PlayerShtPowerLevelCount);
         assert(file.header.deathbombWindowFrames == expected.deathbombWindowFrames);
         for (std::size_t i = 0; i < expected.tuningFloats.size(); ++i) {
             assert(NearlyEqual(file.header.tuningFloats[i], expected.tuningFloats[i]));
@@ -2358,14 +3387,17 @@ void CheckOriginalFilesIfAvailable()
         assert(NearlyEqual(file.header.grazeDiagonalExtent(), expected.tuningFloats[1]));
         assert(NearlyEqual(file.header.orthogonalMovementSpeed(), expected.tuningFloats[6]));
         assert(NearlyEqual(file.header.focusedOrthogonalMovementSpeed(), expected.tuningFloats[7]));
-        assert(file.powerLevels.size() == kThresholds.size());
-        assert(th07::CountShtShotRecords(file) == expected.shotRecords);
+        assert(file.powerLevels.size() == th07::kTh07PlayerShtPowerThresholds.size());
+        assert(th07::CountShtShotRecords(file) == expected.shotRecordCount);
         assert(th07::FindShtPowerLevelForPower(file, 0)->powerThreshold == 8);
         assert(th07::FindShtPowerLevelForPower(file, 128)->powerThreshold == 999);
+        shotRecordCount += th07::CountShtShotRecords(file);
 
-        for (std::size_t i = 0; i < kThresholds.size(); ++i) {
-            assert(file.powerLevels[i].powerThreshold == kThresholds[i]);
-            assert(file.powerLevels[i].recordOffset >= th07::kShtHeaderSize + kThresholds.size() * th07::kShtPowerLevelEntrySize);
+        for (std::size_t i = 0; i < th07::kTh07PlayerShtPowerThresholds.size(); ++i) {
+            assert(file.powerLevels[i].powerThreshold == th07::kTh07PlayerShtPowerThresholds[i]);
+            assert(file.powerLevels[i].recordOffset >=
+                   th07::kShtHeaderSize +
+                       th07::kTh07PlayerShtPowerThresholds.size() * th07::kShtPowerLevelEntrySize);
             assert(file.powerLevels[i].terminatorOffset < expected.fileSize);
             assert(!file.powerLevels[i].shots.empty());
             for (const th07::ShtShotRecord &shot : file.powerLevels[i].shots) {
@@ -2395,10 +3427,11 @@ void CheckOriginalFilesIfAvailable()
         }
     }
 
-    assert((spawnCallbackUsage == std::array<int, 6>{386, 9, 18, 9, 51, 109}));
-    assert((updateCallbackUsage == std::array<int, 6>{461, 36, 17, 41, 18, 9}));
-    assert((drawCallbackUsage == std::array<int, 2>{573, 9}));
-    assert((collisionCallbackUsage == std::array<int, 3>{514, 41, 27}));
+    assert(shotRecordCount == th07::kTh07PlayerShtShotRecordCount);
+    assert(spawnCallbackUsage == th07::kTh07ShtSpawnCallbackUsage);
+    assert(updateCallbackUsage == th07::kTh07ShtUpdateCallbackUsage);
+    assert(drawCallbackUsage == th07::kTh07ShtDrawCallbackUsage);
+    assert(collisionCallbackUsage == th07::kTh07ShtCollisionCallbackUsage);
 
     const th07::ShtFile reimuA = th07::LoadShtFile(extracted / "ply00a.sht");
     const th07::ShtShotRecord &firstShot = reimuA.powerLevels[0].shots[0];
@@ -2417,12 +3450,44 @@ void CheckOriginalFilesIfAvailable()
     assert(firstShot.callbacks.onCollision == 0);
 }
 
+void CheckCompiledShtSummaryTable()
+{
+    assert(th07::kTh07PlayerShotSummaries.size() == th07::kTh07PlayerShotFileCount);
+    assert(th07::kTh07PlayerShotSummaries.front().fileName == "ply00a.sht");
+    assert(th07::kTh07PlayerShotSummaries.back().fileName == "ply02bs.sht");
+    assert(th07::kTh07PlayerShtPowerThresholds.front() == 8);
+    assert(th07::kTh07PlayerShtPowerThresholds.back() == 999);
+
+    std::uint16_t records = 0;
+    for (const th07::Th07PlayerShotSummary &summary : th07::kTh07PlayerShotSummaries) {
+        records += summary.shotRecordCount;
+    }
+    assert(records == th07::kTh07PlayerShtShotRecordCount);
+
+    const th07::Th07PlayerShotSummary *reimuA = th07::FindTh07PlayerShotSummary(th07::Th07ShotType::ReimuA, false);
+    assert(reimuA != nullptr);
+    assert(reimuA->deathbombWindowFrames == 15);
+    assert(NearlyEqual(reimuA->orthogonalMovementSpeed(), 4.0f));
+    assert(NearlyEqual(reimuA->focusedOrthogonalMovementSpeed(), 1.6f));
+
+    const th07::Th07PlayerShotSummary *sakuyaBFocused =
+        th07::FindTh07PlayerShotSummary(th07::Th07ShotType::SakuyaB, true);
+    assert(sakuyaBFocused != nullptr);
+    assert(sakuyaBFocused->shotRecordCount == 63);
+    assert(sakuyaBFocused->deathbombWindowFrames == 6);
+    assert(NearlyEqual(sakuyaBFocused->grazeDiagonalExtent(), 6.0f));
+    assert(NearlyEqual(th07::GetTh07UnfocusedPlayerShotSummary(th07::Th07ShotType::MarisaA)
+                           .orthogonalMovementSpeed(),
+                       5.0f));
+}
+
 } // namespace
 
 int main()
 {
     CheckSyntheticFixture();
     CheckCallbackTablesAgainstOriginalExeIfAvailable();
+    CheckCompiledShtSummaryTable();
     CheckOriginalFilesIfAvailable();
     return 0;
 }

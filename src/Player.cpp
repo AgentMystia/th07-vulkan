@@ -18,14 +18,60 @@
 #include "SoundPlayer.hpp"
 #include "Supervisor.hpp"
 #include "ZunBool.hpp"
+#include "Th07PlayerShotTables.hpp"
 #include "i18n.hpp"
 #include "utils.hpp"
 
 namespace th07
 {
+struct Th07PlayerModeConfigOwner {
+    u8 pending_0_8[kPlayerModeConfigCurrentPowerCapOffset];
+    i32 currentPowerCap;
+};
+
+#if defined(TH07_PLAYER_OBJDIFF) && defined(__i386__) && defined(__GNUC__)
+extern "C" float FUN_00431930(float, float);
+extern "C" Effect *TH07_PLAYER_THISCALL FUN_0041c1c0(EffectManager *, i32, D3DXVECTOR3 *, i32, ZunColor);
+extern "C" i32 TH07_PLAYER_THISCALL FUN_0042d6d8(void *, u32, u32, u32, u32);
+extern "C" void TH07_PLAYER_THISCALL FUN_004394c7(void *, i32);
+extern "C" void TH07_PLAYER_THISCALL FUN_0043958d(void *, void *, void *);
+extern "C" i32 TH07_PLAYER_FASTCALL FUN_0043bdc0(Player *, void *, u32, void *);
+extern "C" void TH07_PLAYER_THISCALL FUN_0044ea20(void *, void *, void *);
+extern "C" void TH07_PLAYER_THISCALL FUN_0044f9a0(void *, void *);
+extern "C" i32 TH07_PLAYER_THISCALL FUN_00450d60(void *, void *);
+#endif
+
 DIFFABLE_STATIC(Player, g_Player);
+DIFFABLE_STATIC(u16, g_Th07PlayerOptionResetPendingInterruptMirror);
+DIFFABLE_STATIC(u32, g_Th07PlayerOptionResetPendingInterruptState);
+DIFFABLE_STATIC(Th07PlayerModeConfigOwner *, g_Th07PlayerModeConfigOwner);
+DIFFABLE_STATIC_ASSIGN(f32, g_Th07PlayerModeOneFrame) = kTh07TimerOneFrame;
+DIFFABLE_STATIC_ASSIGN(f32, g_Th07PlayerMode1ScaleYMultiplier) = kPlayerMode1FadeScaleYMultiplier;
+DIFFABLE_STATIC_ASSIGN(f32, g_Th07PlayerMode1FadeFramesFloat) = kPlayerMode1FadeFramesFloat;
+DIFFABLE_STATIC_ASSIGN(i32, g_Th07PlayerMode1FadeFrames) = kPlayerMode1FadeFrames;
+DIFFABLE_STATIC_ASSIGN(i32, g_Th07PlayerMode1AlphaScale) = 0xff;
 
 namespace {
+
+#if defined(TH07_PLAYER_OBJDIFF) && defined(__i386__) && defined(__GNUC__)
+using Th07ShtSpawnCallback = i32(TH07_PLAYER_FASTCALL *)(Player *, void *, u32, void *);
+using Th07ShtUpdateCallback = i32(TH07_PLAYER_FASTCALL *)(Player *, void *);
+using Th07ShtDrawCallback = void(TH07_PLAYER_FASTCALL *)(Player *, void *);
+using Th07ShtCollisionCallback = i32(TH07_PLAYER_FASTCALL *)(Player *, void *, D3DXVECTOR3 *);
+
+inline i32 ReadTh07PlayerSpawnPowerForObjdiff()
+{
+    i32 currentPower;
+    __asm__ __volatile__(
+        "movl 0x00626278, %%ecx\n\t"
+        "flds 0x7c(%%ecx)\n\t"
+        "call FUN_0048b8a0"
+        : "=a"(currentPower)
+        :
+        : "ecx", "edx", "memory");
+    return currentPower;
+}
+#endif
 
 void ApplyTh07InitialPlayerModeOwnerState(Player *p)
 {
@@ -39,13 +85,170 @@ void ApplyTh07InitialPlayerModeOwnerState(Player *p)
     p->Th07BombCommonEffectDuration() = state.commonEffectDurationFrames;
 }
 
+constexpr float Th07OrthogonalSpeed(Th07ShotType shotType)
+{
+    return GetTh07UnfocusedPlayerShotSummary(shotType).orthogonalMovementSpeed();
+}
+
+constexpr float Th07FocusedOrthogonalSpeed(Th07ShotType shotType)
+{
+    return GetTh07UnfocusedPlayerShotSummary(shotType).focusedOrthogonalMovementSpeed();
+}
+
+constexpr float Th07DiagonalSpeed(Th07ShotType shotType)
+{
+    return GetTh07UnfocusedPlayerShotSummary(shotType).diagonalMovementSpeed();
+}
+
+constexpr float Th07FocusedDiagonalSpeed(Th07ShotType shotType)
+{
+    return GetTh07UnfocusedPlayerShotSummary(shotType).focusedDiagonalMovementSpeed();
+}
+
+Th07ShotType Th07ShotTypeFromGameManager()
+{
+    return static_cast<Th07ShotType>(g_GameManager.CharacterShotType());
+}
+
+PlayerMovementSpeedInput BuildTh07PlayerMovementSpeedInput(Th07ShotType shotType)
+{
+    const Th07PlayerShotSummary &summary = GetTh07UnfocusedPlayerShotSummary(shotType);
+    return {
+        summary.orthogonalMovementSpeed(),
+        summary.focusedOrthogonalMovementSpeed(),
+        summary.diagonalMovementSpeed(),
+        summary.focusedDiagonalMovementSpeed(),
+    };
+}
+
+void ApplyTh07PlayerHorizontalAnimation(Player *p, float horizontalSpeed)
+{
+    const float previousHorizontalSpeed = p->Th07MovementHorizontalSpeed();
+    if (horizontalSpeed < 0.0f && previousHorizontalSpeed >= 0.0f)
+    {
+        g_AnmManager->SetAndExecuteScriptIdx(&p->playerSprite, kPlayerMovementLeanLeftAnmScript);
+    }
+    else if (horizontalSpeed == 0.0f && previousHorizontalSpeed < 0.0f)
+    {
+        g_AnmManager->SetAndExecuteScriptIdx(&p->playerSprite, kPlayerMovementCenterFromLeftAnmScript);
+    }
+
+    if (horizontalSpeed > 0.0f && previousHorizontalSpeed <= 0.0f)
+    {
+        g_AnmManager->SetAndExecuteScriptIdx(&p->playerSprite, kPlayerMovementLeanRightAnmScript);
+    }
+    else if (horizontalSpeed == 0.0f && previousHorizontalSpeed > 0.0f)
+    {
+        g_AnmManager->SetAndExecuteScriptIdx(&p->playerSprite, kPlayerMovementCenterFromRightAnmScript);
+    }
+}
+
+void ApplyTh07PlayerCollisionBoxes(Player *p)
+{
+    p->hitboxTopLeft = p->positionCenter - p->hitboxSize;
+    p->hitboxBottomRight = p->positionCenter + p->hitboxSize;
+    p->grazeTopLeft = p->positionCenter - p->grazeSize;
+    p->grazeBottomRight = p->positionCenter + p->grazeSize;
+    p->grabItemTopLeft = p->positionCenter - p->grabItemSize;
+    p->grabItemBottomRight = p->positionCenter + p->grabItemSize;
+}
+
+void ApplyTh07PlayerCollisionSizes(Player *p, const Th07PlayerShotSummary &shotSummary)
+{
+    p->hitboxSize.x = shotSummary.hitboxDiagonalExtent() / 2.0f;
+    p->hitboxSize.y = p->hitboxSize.x;
+    p->hitboxSize.z = 5.0f;
+
+    p->grazeSize.x = shotSummary.grazeDiagonalExtent() / 2.0f;
+    p->grazeSize.y = p->grazeSize.x;
+    p->grazeSize.z = 5.0f;
+
+    p->grabItemSize.x = 12.0f;
+    p->grabItemSize.y = 12.0f;
+    p->grabItemSize.z = 5.0f;
+}
+
+void SyncLegacyPlayerMovementBridge(Player *p)
+{
+    p->playerDirection = static_cast<PlayerDirection>(p->Th07MovementDirectionState());
+    p->orbState = static_cast<OrbState>(p->Th07OptionState());
+    p->isFocus = p->Th07FocusHeld() != 0;
+}
+
+void ApplyTh07PlayerMovementCore(Player *p, u16 inputMask)
+{
+    const PlayerMovementVector movement =
+        BuildTh07PlayerMovementVector(inputMask, BuildTh07PlayerMovementSpeedInput(Th07ShotTypeFromGameManager()));
+
+    p->Th07MovementDirectionState() = movement.directionState;
+    p->Th07FocusHeld() = movement.focusHeld ? kPlayerFocusHeld : kPlayerFocusNotHeld;
+    SyncLegacyPlayerMovementBridge(p);
+
+    ApplyTh07PlayerHorizontalAnimation(p, movement.horizontalSpeed);
+
+    p->Th07MovementHorizontalSpeed() = movement.horizontalSpeed;
+    p->Th07MovementVerticalSpeed() = movement.verticalSpeed;
+    p->previousHorizontalSpeed = movement.horizontalSpeed;
+    p->previousVerticalSpeed = movement.verticalSpeed;
+
+    p->movementDelta.x =
+        movement.horizontalSpeed * p->horizontalMovementSpeedMultiplierDuringBomb *
+        g_Supervisor.effectiveFramerateMultiplier;
+    p->movementDelta.y =
+        movement.verticalSpeed * p->verticalMovementSpeedMultiplierDuringBomb *
+        g_Supervisor.effectiveFramerateMultiplier;
+
+    p->positionCenter.x += p->movementDelta.x;
+    p->positionCenter.y += p->movementDelta.y;
+
+    if (p->positionCenter.x < g_GameManager.playerMovementAreaTopLeftPos.x)
+    {
+        p->positionCenter.x = g_GameManager.playerMovementAreaTopLeftPos.x;
+    }
+    else if (g_GameManager.playerMovementAreaTopLeftPos.x + g_GameManager.playerMovementAreaSize.x <
+             p->positionCenter.x)
+    {
+        p->positionCenter.x =
+            g_GameManager.playerMovementAreaTopLeftPos.x + g_GameManager.playerMovementAreaSize.x;
+    }
+
+    if (p->positionCenter.y < g_GameManager.playerMovementAreaTopLeftPos.y)
+    {
+        p->positionCenter.y = g_GameManager.playerMovementAreaTopLeftPos.y;
+    }
+    else if (g_GameManager.playerMovementAreaTopLeftPos.y + g_GameManager.playerMovementAreaSize.y <
+             p->positionCenter.y)
+    {
+        p->positionCenter.y =
+            g_GameManager.playerMovementAreaTopLeftPos.y + g_GameManager.playerMovementAreaSize.y;
+    }
+
+    ApplyTh07PlayerCollisionBoxes(p);
+    p->orbsPosition[0] = p->positionCenter;
+    p->orbsPosition[1] = p->positionCenter;
+}
+
 } // namespace
 
-DIFFABLE_STATIC_ARRAY_ASSIGN(CharacterData, 4, g_CharData) = {
-    /* ReimuA  */ {4.0, 2.0, 4.0, 2.0, Player::FireBulletReimuA, Player::FireBulletReimuA},
-    /* ReimuB  */ {4.0, 2.0, 4.0, 2.0, Player::FireBulletReimuB, Player::FireBulletReimuB},
-    /* MarisaA */ {5.0, 2.5, 5.0, 2.5, Player::FireBulletMarisaA, Player::FireBulletMarisaA},
-    /* MarisaB */ {5.0, 2.5, 5.0, 2.5, Player::FireBulletMarisaB, Player::FireBulletMarisaB},
+DIFFABLE_STATIC_ARRAY_ASSIGN(CharacterData, 6, g_CharData) = {
+    /* ReimuA  */ {Th07OrthogonalSpeed(Th07ShotType::ReimuA), Th07FocusedOrthogonalSpeed(Th07ShotType::ReimuA),
+                   Th07DiagonalSpeed(Th07ShotType::ReimuA), Th07FocusedDiagonalSpeed(Th07ShotType::ReimuA),
+                   Player::FireBulletReimuA, Player::FireBulletReimuA},
+    /* ReimuB  */ {Th07OrthogonalSpeed(Th07ShotType::ReimuB), Th07FocusedOrthogonalSpeed(Th07ShotType::ReimuB),
+                   Th07DiagonalSpeed(Th07ShotType::ReimuB), Th07FocusedDiagonalSpeed(Th07ShotType::ReimuB),
+                   Player::FireBulletReimuB, Player::FireBulletReimuB},
+    /* MarisaA */ {Th07OrthogonalSpeed(Th07ShotType::MarisaA), Th07FocusedOrthogonalSpeed(Th07ShotType::MarisaA),
+                   Th07DiagonalSpeed(Th07ShotType::MarisaA), Th07FocusedDiagonalSpeed(Th07ShotType::MarisaA),
+                   Player::FireBulletMarisaA, Player::FireBulletMarisaA},
+    /* MarisaB */ {Th07OrthogonalSpeed(Th07ShotType::MarisaB), Th07FocusedOrthogonalSpeed(Th07ShotType::MarisaB),
+                   Th07DiagonalSpeed(Th07ShotType::MarisaB), Th07FocusedDiagonalSpeed(Th07ShotType::MarisaB),
+                   Player::FireBulletMarisaB, Player::FireBulletMarisaB},
+    /* SakuyaA */ {Th07OrthogonalSpeed(Th07ShotType::SakuyaA), Th07FocusedOrthogonalSpeed(Th07ShotType::SakuyaA),
+                   Th07DiagonalSpeed(Th07ShotType::SakuyaA), Th07FocusedDiagonalSpeed(Th07ShotType::SakuyaA),
+                   Player::FireBulletSakuyaA, Player::FireBulletSakuyaA},
+    /* SakuyaB */ {Th07OrthogonalSpeed(Th07ShotType::SakuyaB), Th07FocusedOrthogonalSpeed(Th07ShotType::SakuyaB),
+                   Th07DiagonalSpeed(Th07ShotType::SakuyaB), Th07FocusedDiagonalSpeed(Th07ShotType::SakuyaB),
+                   Player::FireBulletSakuyaB, Player::FireBulletSakuyaB},
 };
 
 Player::Player()
@@ -87,10 +290,12 @@ void Player::CutChain()
     return;
 }
 
-ZunResult Player::AddedCallback(Player *p)
+ZunResult TH07_PLAYER_FASTCALL Player::AddedCallback(Player *p)
 {
     PlayerBullet *curBullet;
     i32 idx;
+    const Th07ShotType shotType = Th07ShotTypeFromGameManager();
+    const Th07PlayerShotSummary &shotSummary = GetTh07UnfocusedPlayerShotSummary(shotType);
 
     switch (g_GameManager.character)
     {
@@ -129,22 +334,12 @@ ZunResult Player::AddedCallback(Player *p)
     {
         p->bombRegionSizes[idx].x = 0.0;
     }
-    p->hitboxSize.x = 1.25;
-    p->hitboxSize.y = 1.25;
-    p->hitboxSize.z = 5.0;
-    p->grazeSize = p->hitboxSize;
-    p->grabItemSize.x = 12.0;
-    p->grabItemSize.y = 12.0;
-    p->grabItemSize.z = 5.0;
-    p->playerDirection = MOVEMENT_NONE;
+    ApplyTh07PlayerCollisionSizes(p, shotSummary);
     memcpy(&p->characterData, &g_CharData[g_GameManager.CharacterShotType()], sizeof(CharacterData));
-    p->characterData.diagonalMovementSpeed = p->characterData.orthogonalMovementSpeed / sqrtf(2.0);
-    p->characterData.diagonalMovementSpeedFocus = p->characterData.orthogonalMovementSpeedFocus / sqrtf(2.0);
     p->fireBulletCallback = p->characterData.fireBulletCallback;
     p->fireBulletFocusCallback = p->characterData.fireBulletFocusCallback;
     p->playerState = PLAYER_STATE_SPAWNING;
     p->invulnerabilityTimer.SetCurrent(120);
-    p->orbState = ORB_HIDDEN;
     g_AnmManager->SetAndExecuteScriptIdx(&p->orbsSprite[0], ANM_SCRIPT_PLAYER_ORB_LEFT);
     g_AnmManager->SetAndExecuteScriptIdx(&p->orbsSprite[1], ANM_SCRIPT_PLAYER_ORB_RIGHT);
     for (curBullet = &p->bullets[0], idx = 0; idx < ARRAY_SIZE_SIGNED(p->bullets); idx++, curBullet++)
@@ -162,11 +357,16 @@ ZunResult Player::AddedCallback(Player *p)
     p->verticalMovementSpeedMultiplierDuringBomb = 1.0;
     p->horizontalMovementSpeedMultiplierDuringBomb = 1.0;
     ApplyTh07InitialPlayerModeOwnerState(p);
+    p->Th07OptionInterpolationTimer().InitializeForPopup();
+    p->Th07MovementDirectionState() = kPlayerDirectionStateNone;
+    p->Th07MovementHorizontalSpeed() = 0.0f;
+    p->Th07MovementVerticalSpeed() = 0.0f;
+    SyncLegacyPlayerMovementBridge(p);
     p->respawnTimer = 8;
     return ZUN_SUCCESS;
 }
 
-ZunResult Player::DeletedCallback(Player *p)
+ZunResult TH07_PLAYER_FASTCALL Player::DeletedCallback(Player *p)
 {
     if ((i32)(g_Supervisor.curState != SUPERVISOR_STATE_GAMEMANAGER_REINIT))
     {
@@ -175,8 +375,132 @@ ZunResult Player::DeletedCallback(Player *p)
     return ZUN_SUCCESS;
 }
 
+ZunResult TH07_PLAYER_FASTCALL Player::OptionShotEffectCallback(Player *p, void *shot,
+                                                                D3DXVECTOR3 *impactPos)
+{
+    *reinterpret_cast<char *>(reinterpret_cast<u8 *>(p) + kPlayerOptionShotEffectCounterOffset) =
+        *reinterpret_cast<char *>(reinterpret_cast<u8 *>(p) + kPlayerOptionShotEffectCounterOffset) + '\x01';
+
+    if (static_cast<i32>(
+            *reinterpret_cast<u8 *>(reinterpret_cast<u8 *>(p) + kPlayerOptionShotEffectCounterOffset)) %
+            (kPlayerOptionShotEffectCounterMask + 1) ==
+        0)
+    {
+        D3DXVECTOR3 spawnPosition;
+        spawnPosition.x = impactPos->x;
+        spawnPosition.y = impactPos->y;
+        spawnPosition.z = impactPos->z;
+        spawnPosition.x =
+            *reinterpret_cast<f32 *>(reinterpret_cast<u8 *>(shot) + kPlayerOptionShotEffectSourceXOffset);
+#if defined(TH07_PLAYER_OBJDIFF) && defined(__i386__) && defined(__GNUC__)
+        FUN_0041c1c0(reinterpret_cast<EffectManager *>(kPlayerOptionShotEffectManagerAddress),
+                     kPlayerOptionShotEffectSpawnId, &spawnPosition, kPlayerOptionShotEffectSpawnCount,
+                     kPlayerOptionShotEffectSpawnColor);
+#else
+        g_EffectManager.SpawnParticles(kPlayerOptionShotEffectSpawnId, &spawnPosition,
+                                       kPlayerOptionShotEffectSpawnCount,
+                                       kPlayerOptionShotEffectSpawnColor);
+#endif
+    }
+    return ZUN_SUCCESS;
+}
+
+#if defined(TH07_PLAYER_OBJDIFF) && defined(__GNUC__)
+#pragma GCC push_options
+#pragma GCC optimize("Og")
+#endif
+void TH07_PLAYER_FASTCALL Player::UpdateMode1Invulnerable(Player *p)
+{
+    u8 *base = reinterpret_cast<u8 *>(p);
+    u8 *commonEffect = base + kPlayerBombCommonEffectXOffset;
+
+    *reinterpret_cast<u32 *>(base + kPlayerModeSoundTimerOffset) = kPlayerMode1SoundTimerValue;
+
+    const float fade =
+        g_Th07PlayerModeOneFrame -
+        (static_cast<float>(*reinterpret_cast<i32 *>(commonEffect + 8)) +
+         *reinterpret_cast<float *>(commonEffect + 4)) /
+            g_Th07PlayerMode1FadeFramesFloat;
+    *reinterpret_cast<float *>(base + kTh07AnmVmScaleYOffset) =
+        g_Th07PlayerMode1ScaleYMultiplier * fade + g_Th07PlayerModeOneFrame;
+    *reinterpret_cast<float *>(base + kTh07AnmVmScaleXOffset) =
+        g_Th07PlayerModeOneFrame - g_Th07PlayerModeOneFrame * fade;
+    *reinterpret_cast<u32 *>(base + kTh07AnmVmRenderFlagsOffset) |= kPlayerMode1BlendFlag;
+    *reinterpret_cast<u32 *>(base + kPlayerBombVerticalSpeedMultiplierOffset) =
+        kPlayerMode1SpeedMultiplierBits;
+    *reinterpret_cast<u32 *>(base + kPlayerBombHorizontalSpeedMultiplierOffset) =
+        kPlayerMode1SpeedMultiplierBits;
+
+    const i32 duration = *reinterpret_cast<i32 *>(commonEffect + 8);
+    *reinterpret_cast<u32 *>(base + kTh07AnmVmColorOffset) =
+        (static_cast<u32>((duration * g_Th07PlayerMode1AlphaScale) / g_Th07PlayerMode1FadeFrames) << 24) |
+        kPlayerMode1WhiteRgbBits;
+    *reinterpret_cast<u32 *>(base + kPlayerCurrentPowerOffset) = 0;
+
+    if (g_Th07PlayerMode1FadeFrames <= *reinterpret_cast<i32 *>(commonEffect + 8))
+    {
+        *reinterpret_cast<u8 *>(base + kPlayerModeStateOffset) = kPlayerMode1CompleteModeState;
+        *reinterpret_cast<u32 *>(base + kTh07AnmVmScaleYOffset) = kTh07TimerOneFrameBits;
+        *reinterpret_cast<u32 *>(base + kTh07AnmVmScaleXOffset) = kTh07TimerOneFrameBits;
+        *reinterpret_cast<u32 *>(base + kTh07AnmVmColorOffset) = kPlayerMode1WhiteArgbBits;
+        *reinterpret_cast<u32 *>(base + kTh07AnmVmRenderFlagsOffset) =
+            *reinterpret_cast<u32 *>(base + kTh07AnmVmRenderFlagsOffset) &
+            kPlayerMode1BlendFlagClearMask;
+        *reinterpret_cast<i32 *>(commonEffect + 8) = kPlayerMode1CompleteCommonEffectDuration;
+        *reinterpret_cast<u32 *>(commonEffect + 4) = kTh07TimerZeroBits;
+        *reinterpret_cast<u32 *>(commonEffect) = kTh07TimerPreviousSentinelBits;
+        *reinterpret_cast<i32 *>(base + kPlayerCurrentPowerOffset) =
+            g_Th07PlayerModeConfigOwner->currentPowerCap;
+    }
+}
+#if defined(TH07_PLAYER_OBJDIFF) && defined(__GNUC__)
+#pragma GCC pop_options
+#endif
+
+void TH07_PLAYER_FASTCALL Player::ResetOptionFields(Player *p)
+{
+    *reinterpret_cast<u32 *>(reinterpret_cast<u8 *>(p) + kPlayerOptionResetLeftXOffset) =
+        kPlayerOptionResetSentinelBits;
+    *reinterpret_cast<u32 *>(reinterpret_cast<u8 *>(p) + kPlayerOptionResetLeftYOffset) =
+        kPlayerOptionResetSentinelBits;
+    *reinterpret_cast<u32 *>(reinterpret_cast<u8 *>(p) + kPlayerOptionResetLeftZOffset) =
+        kPlayerOptionResetZeroBits;
+    *reinterpret_cast<u32 *>(reinterpret_cast<u8 *>(p) + kPlayerOptionResetRightXOffset) =
+        kPlayerOptionResetSentinelBits;
+    *reinterpret_cast<u32 *>(reinterpret_cast<u8 *>(p) + kPlayerOptionResetRightYOffset) =
+        kPlayerOptionResetSentinelBits;
+    *reinterpret_cast<u32 *>(reinterpret_cast<u8 *>(p) + kPlayerOptionResetRightZOffset) =
+        kPlayerOptionResetZeroBits;
+    *reinterpret_cast<u32 *>(reinterpret_cast<u8 *>(p) + kPlayerOptionResetAuxOffset) =
+        kPlayerOptionResetZeroBits;
+
+    if (p->positionCenter.y < kPlayerOptionResetTopYThreshold)
+    {
+        if (g_Th07PlayerOptionResetPendingInterruptState == kPlayerOptionResetStateEntering)
+        {
+            g_Th07PlayerOptionResetPendingInterruptMirror = kPlayerOptionResetStateInterrupted;
+            g_Th07PlayerOptionResetPendingInterruptState = kPlayerOptionResetStateInterrupted;
+        }
+    }
+    else if (g_Th07PlayerOptionResetPendingInterruptState == kPlayerOptionResetStateEntering ||
+             kPlayerOptionResetRightXThreshold <= p->positionCenter.x)
+    {
+        if (g_Th07PlayerOptionResetPendingInterruptState == kPlayerOptionResetStateEntering &&
+            kPlayerOptionResetRightXThreshold < p->positionCenter.x)
+        {
+            g_Th07PlayerOptionResetPendingInterruptMirror = kPlayerOptionResetStateInterrupted;
+            g_Th07PlayerOptionResetPendingInterruptState = kPlayerOptionResetStateInterrupted;
+        }
+    }
+    else
+    {
+        g_Th07PlayerOptionResetPendingInterruptMirror = kPlayerOptionResetStateEntering;
+        g_Th07PlayerOptionResetPendingInterruptState = kPlayerOptionResetStateEntering;
+    }
+}
+
 #pragma var_order(idx, scaleFactor1, scaleFactor2, lastEnemyHit)
-ChainCallbackResult Player::OnUpdate(Player *p)
+ChainCallbackResult TH07_PLAYER_FASTCALL Player::OnUpdate(Player *p)
 {
     f32 scaleFactor1, scaleFactor2;
     i32 idx;
@@ -367,8 +691,201 @@ ChainCallbackResult Player::OnUpdate(Player *p)
 }
 
 #pragma var_order(bullet, idx, enemyBottomRight, bulletBottomRight, enemyTopLeft, damage, bulletTopLeft)
-i32 Player::CalcDamageToEnemy(D3DXVECTOR3 *enemyPos, D3DXVECTOR3 *enemyHitboxSize, ZunBool *hitWithLazerDuringBomb)
+i32 TH07_PLAYER_THISCALL Player::CalcDamageToEnemy(D3DXVECTOR3 *enemyPos, D3DXVECTOR3 *enemyHitboxSize,
+                                                   ZunBool *hitWithLazerDuringBomb)
 {
+#if defined(TH07_PLAYER_OBJDIFF) && defined(__i386__) && defined(__GNUC__)
+    u8 *base = reinterpret_cast<u8 *>(this);
+    i32 damage;
+    f32 enemyLeft;
+    f32 enemyTop;
+    f32 enemyRight;
+    f32 enemyBottom;
+    u8 *shotSlot;
+    i32 idx;
+
+    damage = 0;
+    if (*reinterpret_cast<i32 *>(base + kPlayerBombCommonEffectDurationOffset) ==
+        *reinterpret_cast<i32 *>(base + kPlayerBombCommonEffectXOffset))
+    {
+        return 0;
+    }
+
+    enemyLeft = enemyPos->x - enemyHitboxSize->x * *reinterpret_cast<f32 *>(kPlayerDamageHalfConstantAddress);
+    enemyTop = enemyPos->y - enemyHitboxSize->y * *reinterpret_cast<f32 *>(kPlayerDamageHalfConstantAddress);
+    enemyRight = enemyHitboxSize->x * *reinterpret_cast<f32 *>(kPlayerDamageHalfConstantAddress) + enemyPos->x;
+    enemyBottom = enemyHitboxSize->y * *reinterpret_cast<f32 *>(kPlayerDamageHalfConstantAddress) + enemyPos->y;
+    shotSlot = base + kPlayerShotSlotArrayOffset;
+    if (hitWithLazerDuringBomb != nullptr)
+    {
+        *hitWithLazerDuringBomb = 0;
+    }
+
+    for (idx = 0; idx < static_cast<i32>(kPlayerShotSlotCount); idx = idx + 1)
+    {
+        if ((*reinterpret_cast<i16 *>(shotSlot + kPlayerShotSlotStateOffset) != 0) &&
+            ((*reinterpret_cast<i16 *>(shotSlot + kPlayerShotSlotStateOffset) ==
+              static_cast<i16>(kPlayerShotSlotActiveState)) ||
+             (*reinterpret_cast<i16 *>(shotSlot + kPlayerShotSlotTypeOffset) == 3)))
+        {
+            if ((*reinterpret_cast<f32 *>(shotSlot + kPlayerShotSlotPositionYOffset) -
+                     *reinterpret_cast<f32 *>(shotSlot + kPlayerShotSlotSizeYOffset) *
+                         *reinterpret_cast<f32 *>(kPlayerDamageHalfConstantAddress) <=
+                 enemyBottom) &&
+                ((*reinterpret_cast<f32 *>(shotSlot + kPlayerShotSlotPositionXOffset) -
+                      *reinterpret_cast<f32 *>(shotSlot + kPlayerShotSlotSizeXOffset) *
+                          *reinterpret_cast<f32 *>(kPlayerDamageHalfConstantAddress) <=
+                  enemyRight) &&
+                 (enemyTop <=
+                  *reinterpret_cast<f32 *>(shotSlot + kPlayerShotSlotSizeYOffset) *
+                          *reinterpret_cast<f32 *>(kPlayerDamageHalfConstantAddress) +
+                      *reinterpret_cast<f32 *>(shotSlot + kPlayerShotSlotPositionYOffset))) &&
+                (enemyLeft <=
+                 *reinterpret_cast<f32 *>(shotSlot + kPlayerShotSlotSizeXOffset) *
+                         *reinterpret_cast<f32 *>(kPlayerDamageHalfConstantAddress) +
+                     *reinterpret_cast<f32 *>(shotSlot + kPlayerShotSlotPositionXOffset)))
+            {
+                if ((*reinterpret_cast<i16 *>(shotSlot + kPlayerShotSlotTypeOffset) ==
+                     kPlayerUpdateLaserTypeFirst) ||
+                    (*reinterpret_cast<i16 *>(shotSlot + kPlayerShotSlotTypeOffset) ==
+                     kPlayerUpdateLaserTypeSecond))
+                {
+                    u32 parity =
+                        *reinterpret_cast<u32 *>(shotSlot + kPlayerShotSlotTimerCurrentOffset) &
+                        kPlayerDamageLaserTimerParityMask;
+                    if (static_cast<i32>(parity) < 0)
+                    {
+                        parity = ((parity - 1) | 0xfffffffe) + 1;
+                    }
+                    if (parity != 0)
+                    {
+                        shotSlot += kPlayerShotSlotStride;
+                        continue;
+                    }
+                }
+
+                if ((*reinterpret_cast<u32 *>(shotSlot + kPlayerShotSlotCollisionCallbackOffset) == 0) ||
+                    ((*reinterpret_cast<Th07ShtCollisionCallback *>(
+                          shotSlot + kPlayerShotSlotCollisionCallbackOffset))(this, shotSlot, enemyPos) == 0))
+                {
+                    if (*reinterpret_cast<i32 *>(base + kPlayerDamageBombActiveFlagOffset) == 0)
+                    {
+                        damage += *reinterpret_cast<i16 *>(shotSlot + kPlayerShotSlotDamageOffset);
+                    }
+                    else if (static_cast<i32>(
+                                 *reinterpret_cast<i16 *>(shotSlot + kPlayerShotSlotDamageOffset)) /
+                                 3 ==
+                             0)
+                    {
+                        damage += 1;
+                    }
+                    else
+                    {
+                        damage += static_cast<i32>(
+                                      *reinterpret_cast<i16 *>(shotSlot + kPlayerShotSlotDamageOffset)) /
+                                  3;
+                    }
+
+                    if ((*reinterpret_cast<i16 *>(shotSlot + kPlayerShotSlotTypeOffset) !=
+                         kPlayerUpdateLaserTypeFirst) &&
+                        (*reinterpret_cast<i16 *>(shotSlot + kPlayerShotSlotTypeOffset) !=
+                         kPlayerUpdateLaserTypeSecond))
+                    {
+                        if (*reinterpret_cast<i16 *>(shotSlot + kPlayerShotSlotStateOffset) ==
+                            static_cast<i16>(kPlayerShotSlotActiveState))
+                        {
+                            void *anmManager =
+                                *reinterpret_cast<void **>(kPlayerShotDrawAnmManagerPointerAddress);
+                            i32 scriptIdx = *reinterpret_cast<i16 *>(
+                                                shotSlot + kPlayerShotSlotScriptIndexOffset) +
+                                            kPlayerDamageCollisionScriptDelta;
+                            *reinterpret_cast<u16 *>(shotSlot + kPlayerShotSlotScriptIndexOffset) =
+                                static_cast<u16>(scriptIdx);
+                            void *script = *reinterpret_cast<void **>(
+                                reinterpret_cast<u8 *>(anmManager) +
+                                kPlayerDamageCollisionScriptTableOffset + scriptIdx * 4);
+                            FUN_0044ea20(anmManager, shotSlot, script);
+                            FUN_0041c1c0(reinterpret_cast<EffectManager *>(kTh07EffectManagerAddress),
+                                         kPlayerDamageShotEffectId,
+                                         reinterpret_cast<D3DXVECTOR3 *>(
+                                             shotSlot + kPlayerShotSlotPositionXOffset),
+                                         kPlayerDamageEffectSpawnCount, kPlayerDamageEffectColor);
+                            *reinterpret_cast<u32 *>(shotSlot + kPlayerShotSlotPositionZOffset) =
+                                kPlayerDamageCollisionEffectZBits;
+                        }
+                        *reinterpret_cast<u16 *>(shotSlot + kPlayerShotSlotStateOffset) =
+                            static_cast<u16>(kPlayerShotSlotCollidedState);
+                        if (*reinterpret_cast<i16 *>(shotSlot + kPlayerShotSlotTypeOffset) != 3)
+                        {
+                            *reinterpret_cast<f32 *>(shotSlot + kPlayerShotSlotVelocityXOffset) =
+                                *reinterpret_cast<f32 *>(shotSlot + kPlayerShotSlotVelocityXOffset) /
+                                *reinterpret_cast<f32 *>(kPlayerDamageShotVelocityDivisorAddress);
+                            *reinterpret_cast<f32 *>(shotSlot + kPlayerShotSlotVelocityYOffset) =
+                                *reinterpret_cast<f32 *>(shotSlot + kPlayerShotSlotVelocityYOffset) /
+                                *reinterpret_cast<f32 *>(kPlayerDamageShotVelocityDivisorAddress);
+                        }
+                    }
+                }
+            }
+        }
+        shotSlot += kPlayerShotSlotStride;
+    }
+
+    for (idx = 0; idx < static_cast<i32>(kPlayerDamageBombRegionCount); idx = idx + 1)
+    {
+        const u32 regionOffset = idx * kPlayerDamageBombRegionStride;
+        f32 *regionSize =
+            reinterpret_cast<f32 *>(base + kPlayerDamageBombRegionSizeOffset + regionOffset);
+        f32 *regionPosition =
+            reinterpret_cast<f32 *>(base + kPlayerDamageBombRegionPositionOffset + regionOffset);
+        if (regionSize[0] <= *reinterpret_cast<f32 *>(kPlayerDamageZeroConstantAddress))
+        {
+            continue;
+        }
+
+        f32 halfScale = *reinterpret_cast<f32 *>(kPlayerDamageOneFrameConstantAddress) /
+                        *reinterpret_cast<f32 *>(kPlayerDamageTwoConstantAddress);
+        f32 regionLeft = regionPosition[0] - halfScale * regionSize[0];
+        f32 regionTop = regionPosition[1] - halfScale * regionSize[1];
+        f32 regionRight = halfScale * regionSize[0] + regionPosition[0];
+        f32 regionBottom = halfScale * regionSize[1] + regionPosition[1];
+        if ((regionLeft <= enemyRight) && (enemyLeft <= regionRight) &&
+            (regionTop <= enemyBottom) && (enemyTop <= regionBottom))
+        {
+            damage += *reinterpret_cast<i32 *>(
+                base + kPlayerDamageBombRegionDamageOffset + regionOffset);
+            *reinterpret_cast<i32 *>(base + kPlayerDamageBombRegionAccumulatedDamageOffset +
+                                     regionOffset) =
+                *reinterpret_cast<i32 *>(base + kPlayerDamageBombRegionAccumulatedDamageOffset +
+                                         regionOffset) +
+                *reinterpret_cast<i32 *>(base + kPlayerDamageBombRegionDamageOffset + regionOffset);
+            *reinterpret_cast<u8 *>(base + kPlayerOptionShotEffectCounterOffset) =
+                *reinterpret_cast<u8 *>(base + kPlayerOptionShotEffectCounterOffset) + 1;
+            if ((*reinterpret_cast<u8 *>(base + kPlayerOptionShotEffectCounterOffset) &
+                 kPlayerDamageBombEffectCadenceMask) == 0)
+            {
+                if (idx < static_cast<i32>(kPlayerDamageBombRegionLowEffectCount))
+                {
+                    FUN_0041c1c0(reinterpret_cast<EffectManager *>(kTh07EffectManagerAddress),
+                                 kPlayerDamageBombEffectLowId, enemyPos,
+                                 kPlayerDamageEffectSpawnCount, kPlayerDamageEffectColor);
+                }
+                else
+                {
+                    FUN_0041c1c0(reinterpret_cast<EffectManager *>(kTh07EffectManagerAddress),
+                                 kPlayerDamageBombEffectHighId, enemyPos,
+                                 kPlayerDamageEffectSpawnCount, kPlayerDamageEffectColor);
+                }
+            }
+            if ((*reinterpret_cast<i32 *>(base + kPlayerDamageBombActiveFlagOffset) != 0) &&
+                (hitWithLazerDuringBomb != nullptr))
+            {
+                *hitWithLazerDuringBomb = 1;
+            }
+        }
+    }
+    return damage;
+#else
     ZunVec3 bulletTopLeft;
     i32 damage;
     ZunVec3 enemyTopLeft;
@@ -493,11 +1010,150 @@ i32 Player::CalcDamageToEnemy(D3DXVECTOR3 *enemyPos, D3DXVECTOR3 *enemyHitboxSiz
         }
     }
     return damage;
+#endif
 }
 
 #pragma var_order(vector, idx, vecLength, bullet)
-void Player::UpdatePlayerBullets(Player *player)
+void TH07_PLAYER_FASTCALL Player::UpdatePlayerBullets(Player *player)
 {
+#if defined(TH07_PLAYER_OBJDIFF) && defined(__i386__) && defined(__GNUC__)
+    u8 *base = reinterpret_cast<u8 *>(player);
+    u8 *shotSlot;
+    i32 idx;
+
+    if (*reinterpret_cast<char *>(base + kPlayerOptionStateOffset) != '\x03' &&
+        *reinterpret_cast<u32 *>(base + kPlayerUpdateTrackedShotEffectFocusedPointerOffset) != 0)
+    {
+        *reinterpret_cast<i16 *>(
+            *reinterpret_cast<u8 **>(base + kPlayerUpdateTrackedShotEffectFocusedPointerOffset) +
+            kPlayerShotSlotStateOffset) = 0;
+        *reinterpret_cast<u32 *>(base + kPlayerUpdateTrackedShotEffectFocusedPointerOffset) = 0;
+    }
+    if (*reinterpret_cast<char *>(base + kPlayerOptionStateOffset) != '\x01')
+    {
+        if (*reinterpret_cast<u32 *>(base + kPlayerUpdateTrackedShotEffectPointerArrayOffset) != 0)
+        {
+            *reinterpret_cast<i16 *>(
+                *reinterpret_cast<u8 **>(base + kPlayerUpdateTrackedShotEffectPointerArrayOffset) +
+                kPlayerShotSlotPendingInterruptOffset) =
+                kPlayerUpdateTrackedShotEffectPendingInterrupt;
+            *reinterpret_cast<u32 *>(base + kPlayerUpdateTrackedShotEffectPointerArrayOffset) = 0;
+        }
+        if (*reinterpret_cast<u32 *>(
+                base + kPlayerUpdateTrackedShotEffectPointerArrayOffset +
+                kPlayerUpdateTrackedShotEffectPointerStride) != 0)
+        {
+            *reinterpret_cast<i16 *>(
+                *reinterpret_cast<u8 **>(base + kPlayerUpdateTrackedShotEffectPointerArrayOffset +
+                                         kPlayerUpdateTrackedShotEffectPointerStride) +
+                kPlayerShotSlotPendingInterruptOffset) =
+                kPlayerUpdateTrackedShotEffectPendingInterrupt;
+            *reinterpret_cast<u32 *>(
+                base + kPlayerUpdateTrackedShotEffectPointerArrayOffset +
+                kPlayerUpdateTrackedShotEffectPointerStride) = 0;
+        }
+    }
+    if (*reinterpret_cast<char *>(base + kPlayerModeStateOffset) == '\x02')
+    {
+        for (idx = 0; idx < static_cast<i32>(kPlayerUpdateTrackedShotEffectPointerCount); idx = idx + 1)
+        {
+            u8 *trackedPointerSlot = base + kPlayerUpdateTrackedShotEffectPointerArrayOffset +
+                                     idx * kPlayerUpdateTrackedShotEffectPointerStride;
+            if (*reinterpret_cast<u32 *>(trackedPointerSlot) != 0)
+            {
+                *reinterpret_cast<i16 *>(
+                    *reinterpret_cast<u8 **>(trackedPointerSlot) + kPlayerShotSlotStateOffset) = 0;
+                *reinterpret_cast<u32 *>(trackedPointerSlot) = 0;
+            }
+        }
+    }
+    for (idx = 0; idx < static_cast<i32>(kPlayerUpdateTrackedShotEffectPointerCount); idx = idx + 1)
+    {
+        u8 *trackedTimer =
+            base + kPlayerUpdateTrackedShotEffectTimerArrayOffset +
+            idx * kPlayerUpdateTrackedShotEffectPointerStride;
+        u8 *trackedPointerSlot =
+            base + kPlayerUpdateTrackedShotEffectPointerArrayOffset +
+            idx * kPlayerUpdateTrackedShotEffectPointerStride;
+        if (*reinterpret_cast<u32 *>(trackedPointerSlot) != 0)
+        {
+            if (0 < *reinterpret_cast<i32 *>(trackedTimer + kPlayerUpdateTrackedShotEffectCurrentOffset) &&
+                *reinterpret_cast<i32 *>(trackedTimer + kPlayerUpdateTrackedShotEffectCurrentOffset) <
+                    kPlayerUpdateTrackedShotEffectMaxDuration)
+            {
+                FUN_004394c7(trackedTimer, 1);
+            }
+            if (*reinterpret_cast<i32 *>(base + kPlayerUpdateTrackedShotEffectMode2GateOffset) < 0 &&
+                kPlayerUpdateTrackedShotEffectClampDuration <
+                    *reinterpret_cast<i32 *>(trackedTimer + kPlayerUpdateTrackedShotEffectCurrentOffset))
+            {
+                *reinterpret_cast<u32 *>(trackedTimer + 8) = kPlayerUpdateTrackedShotEffectClampDuration;
+                *reinterpret_cast<u32 *>(trackedTimer + 4) = kPlayerUpdateTrackedShotEffectZeroBits;
+                *reinterpret_cast<u32 *>(trackedTimer) =
+                    kPlayerUpdateTrackedShotEffectPreviousSentinelBits;
+            }
+            if (*reinterpret_cast<i32 *>(trackedTimer + kPlayerUpdateTrackedShotEffectCurrentOffset) == 0)
+            {
+                *reinterpret_cast<u32 *>(trackedPointerSlot) = 0;
+            }
+        }
+    }
+
+    shotSlot = base + kPlayerShotSlotArrayOffset;
+    for (idx = 0; idx < static_cast<i32>(kPlayerShotSlotCount); idx = idx + 1)
+    {
+        if (*reinterpret_cast<i16 *>(shotSlot + kPlayerShotSlotStateOffset) != 0)
+        {
+            Th07ShtUpdateCallback updateCallback =
+                *reinterpret_cast<Th07ShtUpdateCallback *>(shotSlot + kPlayerShotSlotUpdateCallbackOffset);
+            if (updateCallback == nullptr || (*updateCallback)(player, shotSlot) == 0)
+            {
+                *reinterpret_cast<f32 *>(shotSlot + kPlayerShotSlotPositionXOffset) =
+                    *reinterpret_cast<f32 *>(kPlayerMovementTimerMultiplierGlobalAddress) *
+                        *reinterpret_cast<f32 *>(shotSlot + kPlayerShotSlotVelocityXOffset) +
+                    *reinterpret_cast<f32 *>(shotSlot + kPlayerShotSlotPositionXOffset);
+                *reinterpret_cast<f32 *>(shotSlot + kPlayerShotSlotPositionYOffset) =
+                    *reinterpret_cast<f32 *>(kPlayerMovementTimerMultiplierGlobalAddress) *
+                        *reinterpret_cast<f32 *>(shotSlot + kPlayerShotSlotVelocityYOffset) +
+                    *reinterpret_cast<f32 *>(shotSlot + kPlayerShotSlotPositionYOffset);
+                if (*reinterpret_cast<i16 *>(shotSlot + kPlayerShotSlotTypeOffset) !=
+                        kPlayerUpdateLaserTypeFirst &&
+                    *reinterpret_cast<i16 *>(shotSlot + kPlayerShotSlotTypeOffset) !=
+                        kPlayerUpdateLaserTypeSecond &&
+                    FUN_0042d6d8(reinterpret_cast<void *>(kPlayerUpdateBoundsOwnerAddress),
+                                 *reinterpret_cast<u32 *>(shotSlot + kPlayerShotSlotPositionXOffset),
+                                 *reinterpret_cast<u32 *>(shotSlot + kPlayerShotSlotPositionYOffset),
+                                 *reinterpret_cast<u32 *>(
+                                     *reinterpret_cast<u8 **>(shotSlot +
+                                                              kPlayerShotSlotAnmSpritePointerOffset) +
+                                     kPlayerUpdateLoadedSpriteHeightOffset),
+                                 *reinterpret_cast<u32 *>(
+                                     *reinterpret_cast<u8 **>(shotSlot +
+                                                              kPlayerShotSlotAnmSpritePointerOffset) +
+                                     kPlayerUpdateLoadedSpriteWidthOffset)) == 0)
+                {
+                    *reinterpret_cast<i16 *>(shotSlot + kPlayerShotSlotStateOffset) = 0;
+                }
+                if (FUN_00450d60(
+                        *reinterpret_cast<void **>(kPlayerUpdateAnmManagerPointerAddress),
+                        shotSlot) != 0)
+                {
+                    *reinterpret_cast<i16 *>(shotSlot + kPlayerShotSlotStateOffset) = 0;
+                }
+                *reinterpret_cast<u32 *>(shotSlot + kPlayerShotSlotTimerPreviousOffset) =
+                    *reinterpret_cast<u32 *>(shotSlot + kPlayerShotSlotTimerCurrentOffset);
+                FUN_0043958d(reinterpret_cast<void *>(kPlayerUpdateTimerHelperOwnerAddress),
+                             shotSlot + kPlayerShotSlotTimerCurrentOffset,
+                             shotSlot + kPlayerShotSlotTimerSubframeOffset);
+            }
+            else
+            {
+                *reinterpret_cast<i16 *>(shotSlot + kPlayerShotSlotStateOffset) = 0;
+            }
+        }
+        shotSlot += kPlayerShotSlotStride;
+    }
+#else
     ZunVec2 vector;
     PlayerBullet *bullet;
     f32 vecLength;
@@ -613,9 +1269,10 @@ void Player::UpdatePlayerBullets(Player *player)
         }
         bullet->unk_140.Tick();
     }
+#endif
 }
 
-ChainCallbackResult Player::OnDrawHighPrio(Player *p)
+ChainCallbackResult TH07_PLAYER_FASTCALL Player::OnDrawHighPrio(Player *p)
 {
     Player::DrawBullets(p);
     if (p->bombInfo.isInUse != 0 && p->bombInfo.draw != NULL)
@@ -646,247 +1303,38 @@ ChainCallbackResult Player::OnDrawHighPrio(Player *p)
     return CHAIN_CALLBACK_RESULT_CONTINUE;
 }
 
-ChainCallbackResult Player::OnDrawLowPrio(Player *p)
+ChainCallbackResult TH07_PLAYER_FASTCALL Player::OnDrawLowPrio(Player *p)
 {
     Player::DrawBulletExplosions(p);
     return CHAIN_CALLBACK_RESULT_CONTINUE;
 }
 
-#pragma var_order(playerDirection, verticalSpeed, horizontalSpeed, verticalOrbOffset, horizontalOrbOffset,             \
-                  intermediateFloat)
-ZunResult Player::HandlePlayerInputs()
+#pragma var_order(verticalOrbOffset, horizontalOrbOffset, intermediateFloat)
+ZunResult TH07_PLAYER_THISCALL Player::HandlePlayerInputs()
 {
     float intermediateFloat;
 
     float horizontalOrbOffset;
     float verticalOrbOffset;
+    ZunTimer &optionTimer = this->Th07OptionInterpolationTimer();
 
-    float horizontalSpeed = 0.0;
-    float verticalSpeed = 0.0;
-    PlayerDirection playerDirection = this->playerDirection;
-
-    this->playerDirection = MOVEMENT_NONE;
-    if (IS_PRESSED(TH_BUTTON_UP))
-    {
-        this->playerDirection = MOVEMENT_UP;
-        if (IS_PRESSED(TH_BUTTON_LEFT))
-        {
-            this->playerDirection = MOVEMENT_UP_LEFT;
-        }
-        if (IS_PRESSED(TH_BUTTON_RIGHT))
-        {
-            this->playerDirection = MOVEMENT_UP_RIGHT;
-        }
-    }
-    else
-    {
-        if (IS_PRESSED(TH_BUTTON_DOWN))
-        {
-            this->playerDirection = MOVEMENT_DOWN;
-            if (IS_PRESSED(TH_BUTTON_LEFT))
-            {
-                this->playerDirection = MOVEMENT_DOWN_LEFT;
-            }
-            if (IS_PRESSED(TH_BUTTON_RIGHT))
-            {
-                this->playerDirection = MOVEMENT_DOWN_RIGHT;
-            }
-        }
-        else
-        {
-            if (IS_PRESSED(TH_BUTTON_LEFT))
-            {
-                this->playerDirection = MOVEMENT_LEFT;
-            }
-            if (IS_PRESSED(TH_BUTTON_RIGHT))
-            {
-                this->playerDirection = MOVEMENT_RIGHT;
-            }
-        }
-    }
-    if (IS_PRESSED(TH_BUTTON_FOCUS))
-    {
-        this->isFocus = true;
-    }
-    else
-    {
-        this->isFocus = false;
-    }
-
-    switch (this->playerDirection)
-    {
-    case MOVEMENT_RIGHT:
-        if (IS_PRESSED(TH_BUTTON_FOCUS))
-        {
-            horizontalSpeed = this->characterData.orthogonalMovementSpeedFocus;
-        }
-        else
-        {
-            horizontalSpeed = this->characterData.orthogonalMovementSpeed;
-        }
-        break;
-    case MOVEMENT_LEFT:
-        if (IS_PRESSED(TH_BUTTON_FOCUS))
-        {
-            horizontalSpeed = -this->characterData.orthogonalMovementSpeedFocus;
-        }
-        else
-        {
-            horizontalSpeed = -this->characterData.orthogonalMovementSpeed;
-        }
-        break;
-    case MOVEMENT_UP:
-        if (IS_PRESSED(TH_BUTTON_FOCUS))
-        {
-            verticalSpeed = -this->characterData.orthogonalMovementSpeedFocus;
-        }
-        else
-        {
-            verticalSpeed = -this->characterData.orthogonalMovementSpeed;
-        }
-        break;
-    case MOVEMENT_DOWN:
-        if (IS_PRESSED(TH_BUTTON_FOCUS))
-        {
-            verticalSpeed = this->characterData.orthogonalMovementSpeedFocus;
-        }
-        else
-        {
-            verticalSpeed = this->characterData.orthogonalMovementSpeed;
-        }
-        break;
-    case MOVEMENT_UP_LEFT:
-        if (IS_PRESSED(TH_BUTTON_FOCUS))
-        {
-            horizontalSpeed = -this->characterData.diagonalMovementSpeedFocus;
-        }
-        else
-        {
-            horizontalSpeed = -this->characterData.diagonalMovementSpeed;
-        }
-        verticalSpeed = horizontalSpeed;
-        break;
-    case MOVEMENT_DOWN_LEFT:
-        if (IS_PRESSED(TH_BUTTON_FOCUS))
-        {
-            horizontalSpeed = -this->characterData.diagonalMovementSpeedFocus;
-        }
-        else
-        {
-            horizontalSpeed = -this->characterData.diagonalMovementSpeed;
-        }
-        verticalSpeed = -horizontalSpeed;
-        break;
-    case MOVEMENT_UP_RIGHT:
-        if (IS_PRESSED(TH_BUTTON_FOCUS))
-        {
-            horizontalSpeed = this->characterData.diagonalMovementSpeedFocus;
-        }
-        else
-        {
-            horizontalSpeed = this->characterData.diagonalMovementSpeed;
-        }
-        verticalSpeed = -horizontalSpeed;
-        break;
-    case MOVEMENT_DOWN_RIGHT:
-        if (IS_PRESSED(TH_BUTTON_FOCUS))
-        {
-            horizontalSpeed = this->characterData.diagonalMovementSpeedFocus;
-        }
-        else
-        {
-            horizontalSpeed = this->characterData.diagonalMovementSpeed;
-        }
-        verticalSpeed = horizontalSpeed;
-    }
-
-    if (horizontalSpeed < 0.0f && this->previousHorizontalSpeed >= 0.0f)
-    {
-        g_AnmManager->SetAndExecuteScriptIdx(&this->playerSprite, ANM_SCRIPT_PLAYER_MOVING_LEFT);
-    }
-    else if (!horizontalSpeed && this->previousHorizontalSpeed < 0.0f)
-    {
-        g_AnmManager->SetAndExecuteScriptIdx(&this->playerSprite, ANM_SCRIPT_PLAYER_STOPPING_LEFT);
-    }
-
-    if (horizontalSpeed > 0.0f && this->previousHorizontalSpeed <= 0.0f)
-    {
-        g_AnmManager->SetAndExecuteScriptIdx(&this->playerSprite, ANM_SCRIPT_PLAYER_MOVING_RIGHT);
-    }
-    else if (!horizontalSpeed && this->previousHorizontalSpeed > 0.0f)
-    {
-        g_AnmManager->SetAndExecuteScriptIdx(&this->playerSprite, ANM_SCRIPT_PLAYER_STOPPING_RIGHT);
-    }
-
-    this->previousHorizontalSpeed = horizontalSpeed;
-    this->previousVerticalSpeed = verticalSpeed;
-
-    this->movementDelta.x =
-        horizontalSpeed * this->horizontalMovementSpeedMultiplierDuringBomb * g_Supervisor.effectiveFramerateMultiplier;
-    this->movementDelta.y =
-        verticalSpeed * this->verticalMovementSpeedMultiplierDuringBomb * g_Supervisor.effectiveFramerateMultiplier;
-    this->positionCenter[0] += this->movementDelta.x;
-    this->positionCenter[1] += this->movementDelta.y;
-
-    if (this->positionCenter.x < g_GameManager.playerMovementAreaTopLeftPos.x)
-    {
-        this->positionCenter.x = g_GameManager.playerMovementAreaTopLeftPos.x;
-    }
-    else if (g_GameManager.playerMovementAreaTopLeftPos.x + g_GameManager.playerMovementAreaSize.x <
-             this->positionCenter.x)
-    {
-        this->positionCenter.x = g_GameManager.playerMovementAreaTopLeftPos.x + g_GameManager.playerMovementAreaSize.x;
-    }
-
-    if (this->positionCenter.y < g_GameManager.playerMovementAreaTopLeftPos.y)
-    {
-        this->positionCenter.y = g_GameManager.playerMovementAreaTopLeftPos.y;
-    }
-    else if (g_GameManager.playerMovementAreaTopLeftPos.y + g_GameManager.playerMovementAreaSize.y <
-             this->positionCenter.y)
-    {
-        this->positionCenter.y = g_GameManager.playerMovementAreaTopLeftPos.y + g_GameManager.playerMovementAreaSize.y;
-    }
-
-    this->hitboxTopLeft = this->positionCenter - this->hitboxSize;
-
-    this->hitboxBottomRight = this->positionCenter + this->hitboxSize;
-
-    this->grazeTopLeft = this->positionCenter - this->grazeSize;
-
-    this->grazeBottomRight = this->positionCenter + this->grazeSize;
-
-    this->grabItemTopLeft = this->positionCenter - this->grabItemSize;
-
-    this->grabItemBottomRight = this->positionCenter + this->grabItemSize;
-
-    this->orbsPosition[0] = this->positionCenter;
-    this->orbsPosition[1] = this->positionCenter;
+    ApplyTh07PlayerMovementCore(this, g_CurFrameInput);
 
     verticalOrbOffset = 0.0;
     horizontalOrbOffset = verticalOrbOffset;
 
-    if (g_GameManager.currentPower < 8)
+    switch (this->Th07OptionState())
     {
-        this->orbState = ORB_HIDDEN;
-    }
-    else if (this->orbState == ORB_HIDDEN)
-    {
-        this->orbState = ORB_UNFOCUSED;
-    }
-
-    switch (this->orbState)
-    {
-    case ORB_HIDDEN:
-        this->focusMovementTimer.InitializeForPopup();
+    case kPlayerOptionStateHidden:
+        optionTimer.InitializeForPopup();
         break;
 
-    case ORB_UNFOCUSED:
+    case kPlayerOptionStateUnfocused:
         horizontalOrbOffset = 24.0;
-        this->focusMovementTimer.InitializeForPopup();
-        if (this->isFocus)
+        optionTimer.InitializeForPopup();
+        if (this->Th07FocusHeld() != 0)
         {
-            this->orbState = ORB_FOCUSING;
+            this->Th07OptionState() = kPlayerOptionStateFocusing;
         }
         else
         {
@@ -894,23 +1342,23 @@ ZunResult Player::HandlePlayerInputs()
         }
 
     CASE_ORB_FOCUSING:
-    case ORB_FOCUSING:
-        this->focusMovementTimer.Tick();
+    case kPlayerOptionStateFocusing:
+        optionTimer.Tick();
 
-        intermediateFloat = this->focusMovementTimer.AsFramesFloat() / 8.0f;
+        intermediateFloat = optionTimer.AsFramesFloat() / 8.0f;
         verticalOrbOffset = (1.0f - intermediateFloat) * 32.0f + -32.0f;
         intermediateFloat *= intermediateFloat;
         horizontalOrbOffset = -16.0f * intermediateFloat + 24.0f;
 
-        if ((ZunBool)(this->focusMovementTimer.current >= 8))
+        if ((ZunBool)(optionTimer.current >= 8))
         {
-            this->orbState = ORB_FOCUSED;
+            this->Th07OptionState() = kPlayerOptionStateFocused;
         }
-        if (!this->isFocus)
+        if (this->Th07FocusHeld() == 0)
         {
 
-            this->orbState = ORB_UNFOCUSING;
-            this->focusMovementTimer.SetCurrent(8 - this->focusMovementTimer.AsFrames());
+            this->Th07OptionState() = kPlayerOptionStateUnfocusing;
+            optionTimer.SetCurrent(8 - optionTimer.AsFrames());
 
             goto CASE_ORB_UNFOCUSING;
         }
@@ -919,13 +1367,13 @@ ZunResult Player::HandlePlayerInputs()
             break;
         }
 
-    case ORB_FOCUSED:
+    case kPlayerOptionStateFocused:
         horizontalOrbOffset = 8.0;
         verticalOrbOffset = -32.0;
-        this->focusMovementTimer.InitializeForPopup();
-        if (!this->isFocus)
+        optionTimer.InitializeForPopup();
+        if (this->Th07FocusHeld() == 0)
         {
-            this->orbState = ORB_UNFOCUSING;
+            this->Th07OptionState() = kPlayerOptionStateUnfocusing;
         }
         else
         {
@@ -933,22 +1381,22 @@ ZunResult Player::HandlePlayerInputs()
         }
 
     CASE_ORB_UNFOCUSING:
-    case ORB_UNFOCUSING:
-        this->focusMovementTimer.Tick();
+    case kPlayerOptionStateUnfocusing:
+        optionTimer.Tick();
 
-        intermediateFloat = this->focusMovementTimer.AsFramesFloat() / 8.0f;
+        intermediateFloat = optionTimer.AsFramesFloat() / 8.0f;
         verticalOrbOffset = (32.0f * intermediateFloat) + -32.0f;
         intermediateFloat *= intermediateFloat;
         intermediateFloat = 1.0f - intermediateFloat;
         horizontalOrbOffset = -16.0f * intermediateFloat + 24.0f;
-        if ((ZunBool)(this->focusMovementTimer.current >= 8))
+        if ((ZunBool)(optionTimer.current >= 8))
         {
-            this->orbState = ORB_UNFOCUSED;
+            this->Th07OptionState() = kPlayerOptionStateUnfocused;
         }
-        if (this->isFocus)
+        if (this->Th07FocusHeld() != 0)
         {
-            this->orbState = ORB_FOCUSING;
-            this->focusMovementTimer.SetCurrent(8 - this->focusMovementTimer.AsFrames());
+            this->Th07OptionState() = kPlayerOptionStateFocusing;
+            optionTimer.SetCurrent(8 - optionTimer.AsFrames());
             goto CASE_ORB_FOCUSING;
         }
     }
@@ -957,7 +1405,8 @@ ZunResult Player::HandlePlayerInputs()
     this->orbsPosition[1].x += horizontalOrbOffset;
     this->orbsPosition[0].y += verticalOrbOffset;
     this->orbsPosition[1].y += verticalOrbOffset;
-    if (IS_PRESSED(TH_BUTTON_SHOOT) && !g_Gui.HasCurrentMsgIdx())
+    SyncLegacyPlayerMovementBridge(this);
+    if ((g_CurFrameInput & kPlayerMovementInputMaskShoot) != 0 && !g_Gui.HasCurrentMsgIdx())
     {
         this->StartFireBulletTimer(this);
     }
@@ -965,9 +1414,59 @@ ZunResult Player::HandlePlayerInputs()
     return ZUN_SUCCESS;
 }
 
+#if defined(TH07_PLAYER_OBJDIFF) && defined(__GNUC__)
+#pragma GCC push_options
+#pragma GCC optimize("Og")
+#endif
 #pragma var_order(bulletIdx, bullets)
-void Player::DrawBullets(Player *p)
+void TH07_PLAYER_FASTCALL Player::DrawBullets(Player *p)
 {
+#if defined(TH07_PLAYER_OBJDIFF) && defined(__i386__) && defined(__GNUC__)
+    u8 *shotSlot;
+    i32 bulletIdx;
+
+    shotSlot = reinterpret_cast<u8 *>(p) + kPlayerShotSlotArrayOffset;
+    for (bulletIdx = 0; bulletIdx < static_cast<i32>(kPlayerShotSlotCount); bulletIdx = bulletIdx + 1)
+    {
+        if (*reinterpret_cast<i16 *>(shotSlot + kPlayerShotSlotStateOffset) == kPlayerShotSlotActiveState)
+        {
+            if (*reinterpret_cast<i16 *>(shotSlot + kPlayerShotSlotAutoRotateOffset) != 0)
+            {
+                float rotationZ;
+                const u32 angleBits = *reinterpret_cast<u32 *>(shotSlot + kPlayerShotSlotAngleOffset);
+                __asm__ __volatile__(
+                    "pushl $0x3fc90fdb\n\t"
+                    "pushl %1\n\t"
+                    "call FUN_00431930\n\t"
+                    "addl $8, %%esp\n\t"
+                    "fstps %0"
+                    : "=m"(rotationZ)
+                    : "r"(angleBits)
+                    : "eax", "ecx", "edx", "memory");
+                *reinterpret_cast<f32 *>(shotSlot + kTh07AnmVmRotationZOffset) = rotationZ;
+                *reinterpret_cast<u32 *>(shotSlot + kPlayerShotSlotRenderFlagsOffset) =
+                    *reinterpret_cast<u32 *>(shotSlot + kPlayerShotSlotRenderFlagsOffset) |
+                    kPlayerShotSlotRenderFlagsRotationDirtyBit;
+            }
+            *reinterpret_cast<f32 *>(shotSlot + kPlayerShotSlotDrawPositionXOffset) =
+                *reinterpret_cast<f32 *>(kPlayerShotDrawOffsetXAddress) +
+                *reinterpret_cast<f32 *>(shotSlot + kPlayerShotSlotPositionXOffset);
+            *reinterpret_cast<f32 *>(shotSlot + kPlayerShotSlotDrawPositionYOffset) =
+                *reinterpret_cast<f32 *>(kPlayerShotDrawOffsetYAddress) +
+                *reinterpret_cast<f32 *>(shotSlot + kPlayerShotSlotPositionYOffset);
+            *reinterpret_cast<u32 *>(shotSlot + kPlayerShotSlotDrawPositionZOffset) =
+                kPlayerShotDrawZBits;
+            FUN_0044f9a0(*reinterpret_cast<void **>(kPlayerShotDrawAnmManagerPointerAddress), shotSlot);
+            if (*reinterpret_cast<u32 *>(shotSlot + kPlayerShotSlotDrawCallbackOffset) != 0)
+            {
+                Th07ShtDrawCallback drawCallback =
+                    *reinterpret_cast<Th07ShtDrawCallback *>(shotSlot + kPlayerShotSlotDrawCallbackOffset);
+                (*drawCallback)(p, shotSlot);
+            }
+        }
+        shotSlot += kPlayerShotSlotStride;
+    }
+#else
     i32 bulletIdx;
     PlayerBullet *bullets;
 
@@ -984,11 +1483,60 @@ void Player::DrawBullets(Player *p)
         }
         g_AnmManager->Draw2(&bullets->sprite);
     }
+#endif
 }
+#if defined(TH07_PLAYER_OBJDIFF) && defined(__GNUC__)
+#pragma GCC pop_options
+#endif
 
+#if defined(TH07_PLAYER_OBJDIFF) && defined(__GNUC__)
+#pragma GCC push_options
+#pragma GCC optimize("Og")
+#endif
 #pragma var_order(bulletIdx, bullets)
-void Player::DrawBulletExplosions(Player *p)
+void TH07_PLAYER_FASTCALL Player::DrawBulletExplosions(Player *p)
 {
+#if defined(TH07_PLAYER_OBJDIFF) && defined(__i386__) && defined(__GNUC__)
+    u8 *shotSlot;
+    i32 bulletIdx;
+
+    shotSlot = reinterpret_cast<u8 *>(p) + kPlayerShotSlotArrayOffset;
+    for (bulletIdx = 0; bulletIdx < static_cast<i32>(kPlayerShotSlotCount); bulletIdx = bulletIdx + 1)
+    {
+        if (*reinterpret_cast<i16 *>(shotSlot + kPlayerShotSlotStateOffset) ==
+            kPlayerShotSlotCollidedState)
+        {
+            if (*reinterpret_cast<i16 *>(shotSlot + kPlayerShotSlotAutoRotateOffset) != 0)
+            {
+                float rotationZ;
+                const u32 angleBits = *reinterpret_cast<u32 *>(shotSlot + kPlayerShotSlotAngleOffset);
+                __asm__ __volatile__(
+                    "pushl $0x3fc90fdb\n\t"
+                    "pushl %1\n\t"
+                    "call FUN_00431930\n\t"
+                    "addl $8, %%esp\n\t"
+                    "fstps %0"
+                    : "=m"(rotationZ)
+                    : "r"(angleBits)
+                    : "eax", "ecx", "edx", "memory");
+                *reinterpret_cast<f32 *>(shotSlot + kTh07AnmVmRotationZOffset) = rotationZ;
+                *reinterpret_cast<u32 *>(shotSlot + kPlayerShotSlotRenderFlagsOffset) =
+                    *reinterpret_cast<u32 *>(shotSlot + kPlayerShotSlotRenderFlagsOffset) |
+                    kPlayerShotSlotRenderFlagsRotationDirtyBit;
+            }
+            *reinterpret_cast<f32 *>(shotSlot + kPlayerShotSlotDrawPositionXOffset) =
+                *reinterpret_cast<f32 *>(kPlayerShotDrawOffsetXAddress) +
+                *reinterpret_cast<f32 *>(shotSlot + kPlayerShotSlotPositionXOffset);
+            *reinterpret_cast<f32 *>(shotSlot + kPlayerShotSlotDrawPositionYOffset) =
+                *reinterpret_cast<f32 *>(kPlayerShotDrawOffsetYAddress) +
+                *reinterpret_cast<f32 *>(shotSlot + kPlayerShotSlotPositionYOffset);
+            *reinterpret_cast<u32 *>(shotSlot + kPlayerShotSlotDrawPositionZOffset) =
+                kPlayerShotDrawZBits;
+            FUN_0044f9a0(*reinterpret_cast<void **>(kPlayerShotDrawAnmManagerPointerAddress), shotSlot);
+        }
+        shotSlot += kPlayerShotSlotStride;
+    }
+#else
     i32 bulletIdx;
     PlayerBullet *bullets;
 
@@ -1006,18 +1554,65 @@ void Player::DrawBulletExplosions(Player *p)
         bullets->sprite.pos.z = 0.4f;
         g_AnmManager->Draw2(&bullets->sprite);
     }
+#endif
 }
+#if defined(TH07_PLAYER_OBJDIFF) && defined(__GNUC__)
+#pragma GCC pop_options
+#endif
 
-void Player::StartFireBulletTimer(Player *p)
+void TH07_PLAYER_FASTCALL Player::StartFireBulletTimer(Player *p)
 {
+#if defined(TH07_PLAYER_OBJDIFF) && defined(__i386__) && defined(__GNUC__)
+    u8 *base = reinterpret_cast<u8 *>(p);
+    if (*reinterpret_cast<i32 *>(base + kPlayerFireTimerCurrentOffset) < 0)
+    {
+        u8 *timer = base + kPlayerFireTimerPreviousOffset;
+        *reinterpret_cast<i32 *>(timer + 8) = kPlayerFireTimerStartValue;
+        *reinterpret_cast<u32 *>(timer + 4) = kPlayerFireTimerSubframeZeroBits;
+        *reinterpret_cast<u32 *>(timer) = kPlayerFireTimerPreviousSentinelBits;
+    }
+#else
     if (p->fireBulletTimer.AsFrames() < 0)
     {
         p->fireBulletTimer.InitializeForPopup();
     }
+#endif
 }
 
-ZunResult Player::UpdateFireBulletsTimer(Player *p)
+ZunResult TH07_PLAYER_FASTCALL Player::UpdateFireBulletsTimer(Player *p)
 {
+#if defined(TH07_PLAYER_OBJDIFF) && defined(__i386__) && defined(__GNUC__)
+    u8 *base = reinterpret_cast<u8 *>(p);
+    u8 *timer;
+
+    if (*reinterpret_cast<i32 *>(base + kPlayerFireTimerCurrentOffset) < 0)
+    {
+        return ZUN_SUCCESS;
+    }
+
+    timer = base + kPlayerFireTimerPreviousOffset;
+    if (*reinterpret_cast<i32 *>(timer + 8) != *reinterpret_cast<i32 *>(timer) &&
+        (*reinterpret_cast<u32 *>(kPlayerFireTimerReplayGateAddress) == 0 ||
+         *reinterpret_cast<u8 *>(kPlayerFireTimerReplayGateByte0Address) != '\x01' ||
+         *reinterpret_cast<u8 *>(kPlayerFireTimerReplayGateByte1Address) != '\x01'))
+    {
+        Player::SpawnBullets(p, *reinterpret_cast<u32 *>(base + kPlayerFireTimerCurrentOffset));
+    }
+
+    *reinterpret_cast<u32 *>(timer) = *reinterpret_cast<u32 *>(timer + 8);
+    FUN_0043958d(reinterpret_cast<void *>(kPlayerUpdateTimerHelperOwnerAddress),
+                 timer + 8, timer + 4);
+
+    if (kPlayerFireTimerStopFrame <= *reinterpret_cast<i32 *>(base + kPlayerFireTimerCurrentOffset) ||
+        *reinterpret_cast<char *>(base + kPlayerModeStateOffset) == '\x02' ||
+        *reinterpret_cast<char *>(base + kPlayerModeStateOffset) == '\x01')
+    {
+        *reinterpret_cast<i32 *>(timer + 8) = kPlayerFireTimerStopValue;
+        *reinterpret_cast<u32 *>(timer + 4) = kPlayerFireTimerSubframeZeroBits;
+        *reinterpret_cast<u32 *>(timer) = kPlayerFireTimerPreviousSentinelBits;
+    }
+    return ZUN_SUCCESS;
+#else
     if (p->fireBulletTimer.AsFrames() < 0)
     {
         return ZUN_SUCCESS;
@@ -1037,10 +1632,11 @@ ZunResult Player::UpdateFireBulletsTimer(Player *p)
         p->fireBulletTimer.SetCurrent(-1);
     }
     return ZUN_SUCCESS;
+#endif
 }
 
 #pragma var_order(relY, relX)
-f32 Player::AngleFromPlayer(D3DXVECTOR3 *pos)
+f32 TH07_PLAYER_THISCALL Player::AngleFromPlayer(D3DXVECTOR3 *pos)
 {
     f32 relX;
     f32 relY;
@@ -1055,7 +1651,7 @@ f32 Player::AngleFromPlayer(D3DXVECTOR3 *pos)
 }
 
 #pragma var_order(relY, relX)
-f32 Player::AngleToPlayer(D3DXVECTOR3 *pos)
+f32 TH07_PLAYER_THISCALL Player::AngleToPlayer(D3DXVECTOR3 *pos)
 {
     f32 relX;
     f32 relY;
@@ -1072,8 +1668,93 @@ f32 Player::AngleToPlayer(D3DXVECTOR3 *pos)
 }
 
 #pragma var_order(idx, curBulletIdx, curBullet, bulletResult)
-void Player::SpawnBullets(Player *p, u32 timer)
+void TH07_PLAYER_FASTCALL Player::SpawnBullets(Player *p, u32 timer)
 {
+#if defined(TH07_PLAYER_OBJDIFF) && defined(__i386__) && defined(__GNUC__)
+    u8 *base = reinterpret_cast<u8 *>(p);
+    u32 *powerEntry;
+    u8 *shotRecord;
+    u8 *shotSlot;
+    i32 slotIdx;
+    i32 spawnResult;
+
+    if (*reinterpret_cast<char *>(base + kPlayerFocusHeldOffset) == '\0')
+    {
+        powerEntry = reinterpret_cast<u32 *>(
+            *reinterpret_cast<u8 **>(base + kPlayerShotDataPointerOffset) +
+            kPlayerSpawnBulletsShtPowerTableOffset);
+    }
+    else
+    {
+        powerEntry = reinterpret_cast<u32 *>(
+            *reinterpret_cast<u8 **>(base + kPlayerFocusedShotDataPointerOffset) +
+            kPlayerSpawnBulletsShtPowerTableOffset);
+    }
+    while (ReadTh07PlayerSpawnPowerForObjdiff() >=
+           *reinterpret_cast<i32 *>(reinterpret_cast<u8 *>(powerEntry) +
+                                    kPlayerSpawnBulletsShtPowerThresholdOffset))
+    {
+        powerEntry = reinterpret_cast<u32 *>(reinterpret_cast<u8 *>(powerEntry) +
+                                             kPlayerSpawnBulletsShtPowerEntryStride);
+    }
+
+    shotRecord = reinterpret_cast<u8 *>(*reinterpret_cast<u32 *>(
+        reinterpret_cast<u8 *>(powerEntry) + kPlayerSpawnBulletsShtPowerRecordPointerOffset));
+    shotSlot = base + kPlayerShotSlotArrayOffset;
+    slotIdx = 0;
+    do
+    {
+        if (static_cast<i32>(kPlayerShotSlotCount) <= slotIdx)
+        {
+            return;
+        }
+        if (*reinterpret_cast<i16 *>(shotSlot + kPlayerShotSlotStateOffset) == 0)
+        {
+            do
+            {
+                Th07ShtSpawnCallback spawnCallback =
+                    *reinterpret_cast<Th07ShtSpawnCallback *>(
+                        shotRecord + kPlayerSpawnBulletsShtSpawnCallbackOffset);
+                if (spawnCallback == nullptr)
+                {
+                    spawnResult = FUN_0043bdc0(p, shotSlot, timer, shotRecord);
+                }
+                else
+                {
+                    spawnResult = (*spawnCallback)(p, shotSlot, timer, shotRecord);
+                }
+                if (spawnResult == 1)
+                {
+                    *reinterpret_cast<u32 *>(shotSlot + kPlayerShotSlotRenderFlagsOffset) =
+                        *reinterpret_cast<u32 *>(shotSlot + kPlayerShotSlotRenderFlagsOffset) |
+                        kPlayerShotSlotRenderFlagsActiveBit;
+                    *reinterpret_cast<i16 *>(shotSlot + kPlayerShotSlotStateOffset) = 1;
+                    *reinterpret_cast<u8 **>(shotSlot + kPlayerShotSlotShtRecordPointerOffset) = shotRecord;
+                    *reinterpret_cast<u32 *>(shotSlot + kPlayerShotSlotUpdateCallbackOffset) =
+                        *reinterpret_cast<u32 *>(
+                            *reinterpret_cast<u8 **>(shotSlot + kPlayerShotSlotShtRecordPointerOffset) +
+                            kPlayerSpawnBulletsShtUpdateCallbackOffset);
+                    *reinterpret_cast<u32 *>(shotSlot + kPlayerShotSlotDrawCallbackOffset) =
+                        *reinterpret_cast<u32 *>(
+                            *reinterpret_cast<u8 **>(shotSlot + kPlayerShotSlotShtRecordPointerOffset) +
+                            kPlayerSpawnBulletsShtDrawCallbackOffset);
+                    *reinterpret_cast<u32 *>(shotSlot + kPlayerShotSlotCollisionCallbackOffset) =
+                        *reinterpret_cast<u32 *>(
+                            *reinterpret_cast<u8 **>(shotSlot + kPlayerShotSlotShtRecordPointerOffset) +
+                            kPlayerSpawnBulletsShtCollisionCallbackOffset);
+                }
+                shotRecord += kPlayerSpawnBulletsShtShotRecordStride;
+                if (*reinterpret_cast<i16 *>(shotRecord + kPlayerSpawnBulletsShtShotRecordTerminatorOffset) <
+                    0)
+                {
+                    return;
+                }
+            } while (spawnResult == 0);
+        }
+        slotIdx = slotIdx + 1;
+        shotSlot += kPlayerShotSlotStride;
+    } while (true);
+#else
     FireBulletResult bulletResult;
     PlayerBullet *curBullet;
     i32 curBulletIdx;
@@ -1118,6 +1799,7 @@ void Player::SpawnBullets(Player *p, u32 timer)
             goto WHILE_LOOP;
         }
     }
+#endif
 }
 
 #pragma var_order(bulletData, bulletFrame, unused3, unused, unused2)
@@ -1225,8 +1907,136 @@ FireBulletResult Player::FireBulletMarisaB(Player *player, PlayerBullet *bullet,
     return player->FireSingleBullet(player, bullet, bulletIdx, framesSinceLastBullet, g_CharacterPowerDataMarisaB);
 }
 
+FireBulletResult Player::FireBulletSakuyaA(Player *, PlayerBullet *, u32, u32)
+{
+    // TH07 Sakuya .sht records are parsed, but the original callback runtime is not wired yet.
+    return FBR_STOP_SPAWNING;
+}
+
+FireBulletResult Player::FireBulletSakuyaB(Player *, PlayerBullet *, u32, u32)
+{
+    // Keep this explicit rather than borrowing another shot type's behavior.
+    return FBR_STOP_SPAWNING;
+}
+
+#pragma var_order(i, slot, bulletBottom, bulletRight, bulletTop, bulletLeft)
+i32 TH07_PLAYER_THISCALL Player::CalcBombCollision(D3DXVECTOR3 *center, D3DXVECTOR3 *size)
+{
+    f32 bulletLeft;
+    f32 bulletTop;
+    f32 bulletRight;
+    f32 bulletBottom;
+    f32 *slot;
+    i32 i;
+
+    bulletLeft = center->x - size->x / 2.0f;
+    bulletTop = center->y - size->y / 2.0f;
+    bulletRight = size->x / 2.0f + center->x;
+    bulletBottom = size->y / 2.0f + center->y;
+    slot = reinterpret_cast<f32 *>(reinterpret_cast<u8 *>(this) + kPlayerBombCollisionSlotArrayOffset);
+    for (i = 0; i < static_cast<i32>(kPlayerBombCollisionSlotCount); i++, slot += 8)
+    {
+        if (slot[2] == 0.0f)
+        {
+            const f32 deltaX = center->x - slot[0];
+            const f32 deltaY = center->y - slot[1];
+            if (slot[4] != 0.0f && deltaY * deltaY + deltaX * deltaX < slot[4] * slot[4])
+            {
+                *reinterpret_cast<u32 *>(reinterpret_cast<u8 *>(this) + kPlayerCollisionPayloadOffset) =
+                    reinterpret_cast<u32 *>(slot)[7];
+                return 2;
+            }
+        }
+        else if (slot[0] - slot[2] / 2.0f <= bulletRight &&
+                 bulletLeft <= slot[2] / 2.0f + slot[0] &&
+                 slot[1] - slot[3] / 2.0f <= bulletBottom &&
+                 bulletTop <= slot[3] / 2.0f + slot[1])
+        {
+            *reinterpret_cast<u32 *>(reinterpret_cast<u8 *>(this) + kPlayerCollisionPayloadOffset) =
+                reinterpret_cast<u32 *>(slot)[7];
+            return 2;
+        }
+    }
+
+    return 0;
+}
+
+#pragma var_order(slot, i)
+void TH07_PLAYER_THISCALL Player::UpdateBombCollisionSlots()
+{
+    Th07PlayerBombCollisionSlot *slot;
+    i32 i;
+
+    for (i = 0; i < static_cast<i32>(kPlayerBombCollisionBulletClearCount); i++)
+    {
+        *reinterpret_cast<u32 *>(reinterpret_cast<u8 *>(this) + kPlayerBombCollisionBulletClearOffset +
+                                 i * kPlayerBombCollisionBulletClearStride) = 0;
+    }
+
+    slot = this->th07BombCollisionSlots;
+    for (i = 0; i < static_cast<i32>(kPlayerBombCollisionSlotCount); i++, slot++)
+    {
+        if (slot->framesLeft < 1)
+        {
+            slot->radius = 0.0f;
+            slot->rectSizeX = 0.0f;
+        }
+        else
+        {
+            slot->framesLeft--;
+            slot->radius += slot->radiusVelocity;
+        }
+    }
+}
+
+#pragma var_order(slot, i)
+Th07PlayerBombCollisionSlot *TH07_PLAYER_THISCALL Player::RegisterBombCollisionRect(
+    D3DXVECTOR3 *center, f32 sizeX, f32 sizeY, u32 payloadBits)
+{
+    Th07PlayerBombCollisionSlot *slot;
+    i32 i;
+
+    for (i = 0, slot = this->th07BombCollisionSlots;
+         i < static_cast<i32>(kPlayerBombCollisionSlotCount - 1) &&
+         (slot->rectSizeX != 0.0f || slot->radius != 0.0f);
+         i++, slot++)
+    {
+    }
+
+    slot->x = center->x;
+    slot->y = center->y;
+    slot->rectSizeX = sizeX;
+    slot->rectSizeY = sizeY;
+    slot->framesLeft = 0;
+    slot->payloadBits = payloadBits;
+    return slot;
+}
+
+#pragma var_order(slot, i)
+Th07PlayerBombCollisionSlot *TH07_PLAYER_THISCALL Player::RegisterBombCollisionCircle(
+    D3DXVECTOR3 *center, f32 radius, f32 radiusVelocity, i32 framesLeft, u32 payloadBits)
+{
+    Th07PlayerBombCollisionSlot *slot;
+    i32 i;
+
+    for (i = 0, slot = this->th07BombCollisionSlots;
+         i < static_cast<i32>(kPlayerBombCollisionSlotCount - 1) &&
+         (slot->rectSizeX != 0.0f || slot->radius != 0.0f);
+         i++, slot++)
+    {
+    }
+
+    slot->x = center->x;
+    slot->y = center->y;
+    slot->radius = radius;
+    slot->radiusVelocity = radiusVelocity;
+    slot->framesLeft = framesLeft;
+    slot->payloadBits = payloadBits;
+    return slot;
+}
+
 #pragma var_order(bombTopLeft, i, bulletBottomRight, bulletTopLeft, bombProjectile, bombBottomRight)
-i32 Player::CheckGraze(D3DXVECTOR3 *center, D3DXVECTOR3 *size)
+i32 TH07_PLAYER_THISCALL Player::CheckGraze(D3DXVECTOR3 *center, D3DXVECTOR3 *size)
 {
     D3DXVECTOR3 bombBottomRight;
     PlayerRect *bombProjectile;
@@ -1234,6 +2044,13 @@ i32 Player::CheckGraze(D3DXVECTOR3 *center, D3DXVECTOR3 *size)
     D3DXVECTOR3 bulletBottomRight;
     D3DXVECTOR3 bulletTopLeft;
     i32 i;
+
+    *reinterpret_cast<u32 *>(reinterpret_cast<u8 *>(this) + kPlayerCollisionPayloadOffset) =
+        kPlayerCollisionDefaultPayloadBits;
+    if (this->CalcBombCollision(center, size) != 0)
+    {
+        return 2;
+    }
 
     bulletTopLeft.x = center->x - size->x / 2.0f - 20.0f;
     bulletTopLeft.y = center->y - size->y / 2.0f - 20.0f;
@@ -1265,8 +2082,8 @@ i32 Player::CheckGraze(D3DXVECTOR3 *center, D3DXVECTOR3 *size)
     {
         return 0;
     }
-    if (this->hitboxTopLeft.x > bulletBottomRight.x || this->hitboxBottomRight.x < bulletTopLeft.x ||
-        this->hitboxTopLeft.y > bulletBottomRight.y || this->hitboxBottomRight.y < bulletTopLeft.y)
+    if (this->grazeTopLeft.x > bulletBottomRight.x || this->grazeBottomRight.x < bulletTopLeft.x ||
+        this->grazeTopLeft.y > bulletBottomRight.y || this->grazeBottomRight.y < bulletTopLeft.y)
     {
         return 0;
     }
@@ -1279,13 +2096,20 @@ i32 Player::CheckGraze(D3DXVECTOR3 *center, D3DXVECTOR3 *size)
 #pragma var_order(padding1, bombProjectileTop, bombProjectileLeft, curBombIdx, padding2, bulletBottom, bulletRight,    \
                   padding3, bulletTop, bulletLeft, curBombProjectile, padding4, bombProjectileBottom,                  \
                   bombProjectileRight)
-i32 Player::CalcKillBoxCollision(D3DXVECTOR3 *bulletCenter, D3DXVECTOR3 *bulletSize)
+i32 TH07_PLAYER_THISCALL Player::CalcKillBoxCollision(D3DXVECTOR3 *bulletCenter, D3DXVECTOR3 *bulletSize)
 {
     PlayerRect *curBombProjectile;
     f32 bulletLeft, bulletTop, bulletRight, bulletBottom;
     f32 bombProjectileLeft, bombProjectileTop, bombProjectileRight, bombProjectileBottom;
     i32 curBombIdx;
     i32 padding1, padding2, padding3, padding4;
+
+    *reinterpret_cast<u32 *>(reinterpret_cast<u8 *>(this) + kPlayerCollisionPayloadOffset) =
+        kPlayerCollisionDefaultPayloadBits;
+    if (this->CalcBombCollision(bulletCenter, bulletSize) != 0)
+    {
+        return 2;
+    }
 
     curBombProjectile = this->bombProjectiles;
     bulletLeft = bulletCenter->x - bulletSize->x / 2.0f;
@@ -1325,8 +2149,8 @@ i32 Player::CalcKillBoxCollision(D3DXVECTOR3 *bulletCenter, D3DXVECTOR3 *bulletS
 }
 
 #pragma var_order(playerRelativeTopLeft, laserBottomRight, laserTopLeft, playerRelativeBottomRight)
-i32 Player::CalcLaserHitbox(D3DXVECTOR3 *laserCenter, D3DXVECTOR3 *laserSize, D3DXVECTOR3 *rotation, f32 angle,
-                            i32 canGraze)
+i32 TH07_PLAYER_THISCALL Player::CalcLaserHitbox(D3DXVECTOR3 *laserCenter, D3DXVECTOR3 *laserSize,
+                                                 D3DXVECTOR3 *rotation, f32 angle, i32 canGraze)
 {
     D3DXVECTOR3 laserTopLeft;
     D3DXVECTOR3 laserBottomRight;
@@ -1382,29 +2206,28 @@ LASER_COLLISION:
 }
 
 #pragma var_order(itemBottomRight, itemTopLeft)
-i32 Player::CalcItemBoxCollision(D3DXVECTOR3 *itemCenter, D3DXVECTOR3 *itemSize)
+i32 TH07_PLAYER_THISCALL Player::CalcItemBoxCollision(D3DXVECTOR3 *itemCenter, D3DXVECTOR3 *itemSize)
 {
-    if (this->playerState != PLAYER_STATE_ALIVE && this->playerState != PLAYER_STATE_INVULNERABLE)
+    if (*reinterpret_cast<i8 *>(reinterpret_cast<u8 *>(this) + kPlayerModeStateOffset) != 0 &&
+        *reinterpret_cast<i8 *>(reinterpret_cast<u8 *>(this) + kPlayerModeStateOffset) != 3 &&
+        *reinterpret_cast<i8 *>(reinterpret_cast<u8 *>(this) + kPlayerModeStateOffset) != 4)
     {
         return 0;
     }
-    D3DXVECTOR3 itemTopLeft;
-    memcpy(&itemTopLeft, &(*itemCenter - *itemSize / 2.0f), sizeof(D3DXVECTOR3));
-    D3DXVECTOR3 itemBottomRight;
-    memcpy(&itemBottomRight, &(*itemCenter + *itemSize / 2.0f), sizeof(D3DXVECTOR3));
 
-    if (this->grabItemTopLeft.x > itemBottomRight.x || this->grabItemBottomRight.x < itemTopLeft.x ||
-        this->grabItemTopLeft.y > itemBottomRight.y || this->grabItemBottomRight.y < itemTopLeft.y)
+    const f32 halfItemWidth = itemSize->x * (1.0f / 2.0f);
+    const f32 halfItemHeight = itemSize->y * (1.0f / 2.0f);
+    if (itemCenter->x + halfItemWidth < this->grabItemTopLeft.x ||
+        this->grabItemBottomRight.x < itemCenter->x - halfItemWidth ||
+        itemCenter->y + halfItemHeight < this->grabItemTopLeft.y ||
+        this->grabItemBottomRight.y < itemCenter->y - halfItemHeight)
     {
         return 0;
     }
-    else
-    {
-        return 1;
-    }
+    return 1;
 }
 
-void Player::ScoreGraze(D3DXVECTOR3 *center)
+void TH07_PLAYER_THISCALL Player::ScoreGraze(D3DXVECTOR3 *center)
 {
     D3DXVECTOR3 particlePosition;
 
@@ -1429,7 +2252,7 @@ void Player::ScoreGraze(D3DXVECTOR3 *center)
 }
 
 #pragma var_order(curLaserTimerIdx)
-void Player::Die()
+void TH07_PLAYER_THISCALL Player::Die()
 {
     int curLaserTimerIdx;
 

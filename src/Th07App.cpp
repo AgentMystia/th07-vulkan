@@ -1,4 +1,5 @@
 #include "ReferencePaths.hpp"
+#include "Th07FileSystemRuntime.hpp"
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
@@ -35,6 +36,16 @@ void PrintReferenceStatus()
     }
 }
 
+bool HasReadableRuntimeArchive()
+{
+    th07::Th07FileSystemRuntime fs;
+    if (!fs.OpenDefaultArchive()) {
+        return false;
+    }
+    const th07::Th07FileSystemOpenResult textAnm = fs.OpenPath("data/text.anm", false);
+    return textAnm.status == th07::Th07FileSystemOpenStatus::Success && textAnm.lastFileSize != 0;
+}
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -42,12 +53,12 @@ int main(int argc, char **argv)
     PrintReferenceStatus();
 
     if (HasArg(argc, argv, "--check-resources")) {
-        return th07::HasRequiredOriginalFiles() ? EXIT_SUCCESS : EXIT_FAILURE;
+        return th07::HasRequiredOriginalFiles() && HasReadableRuntimeArchive() ? EXIT_SUCCESS : EXIT_FAILURE;
     }
 
     if (HasArg(argc, argv, "--headless-smoke")) {
         std::cout << "Headless smoke passed; SDL/Vulkan window creation was intentionally skipped.\n";
-        return th07::HasRequiredOriginalFiles() ? EXIT_SUCCESS : EXIT_FAILURE;
+        return th07::HasRequiredOriginalFiles() && HasReadableRuntimeArchive() ? EXIT_SUCCESS : EXIT_FAILURE;
     }
 
     const bool smoke = HasArg(argc, argv, "--smoke");

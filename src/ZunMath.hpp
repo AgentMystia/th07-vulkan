@@ -1,6 +1,7 @@
 #pragma once
 #include "diffbuild.hpp"
 #include "inttypes.hpp"
+#include <cmath>
 #include <Windows.h>
 #include <d3dx8math.h>
 
@@ -65,6 +66,7 @@ ZUN_ASSERT_SIZE(ZunVec3, 0xC);
 
 void __inline fsincos_wrapper(f32 *out_sine, f32 *out_cosine, f32 angle)
 {
+#if defined(_MSC_VER) && !defined(TH07_PLAYER_OBJDIFf)
     __asm {
         fld [angle]
         fsincos
@@ -73,10 +75,15 @@ void __inline fsincos_wrapper(f32 *out_sine, f32 *out_cosine, f32 angle)
         mov eax, [out_sine]
         fstp [eax]
     }
+#else
+    *out_sine = sinf(angle);
+    *out_cosine = cosf(angle);
+#endif
 }
 
 void __inline sincosmul(D3DXVECTOR3 *out_vel, f32 input, f32 multiplier)
 {
+#if defined(_MSC_VER) && !defined(TH07_PLAYER_OBJDIFf)
     __asm {
         mov eax, out_vel
         fld input
@@ -86,6 +93,10 @@ void __inline sincosmul(D3DXVECTOR3 *out_vel, f32 input, f32 multiplier)
         fmul [multiplier]
         fstp [eax+4]
     }
+#else
+    out_vel->x = cosf(input) * multiplier;
+    out_vel->y = sinf(input) * multiplier;
+#endif
 }
 
 f32 __inline invertf(f32 x)
@@ -95,10 +106,14 @@ f32 __inline invertf(f32 x)
 
 f32 __inline rintf(f32 float_in)
 {
+#if defined(_MSC_VER) && !defined(TH07_PLAYER_OBJDIFf)
     __asm {
         fld float_in
         frndint
         fstp float_in
     }
     return float_in;
+#else
+    return nearbyintf(float_in);
+#endif
 }

@@ -11,11 +11,13 @@
 
 namespace th07
 {
-DIFFABLE_STATIC_ARRAY_ASSIGN(BombData, 4, g_BombData) = {
+DIFFABLE_STATIC_ARRAY_ASSIGN(BombData, 6, g_BombData) = {
     /* ReimuA  */ {BombData::BombReimuACalc, BombData::BombReimuADraw},
     /* ReimuB  */ {BombData::BombReimuBCalc, BombData::BombReimuBDraw},
     /* MarisaA */ {BombData::BombMarisaACalc, BombData::BombMarisaADraw},
     /* MarisaB */ {BombData::BombMarisaBCalc, BombData::BombMarisaBDraw},
+    /* SakuyaA */ {nullptr, nullptr},
+    /* SakuyaB */ {nullptr, nullptr},
 };
 
 #pragma var_order(angle, i, bombSprite, vecLength, bombPivot, bombIdx)

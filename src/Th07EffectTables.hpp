@@ -49,6 +49,7 @@ inline constexpr std::uint32_t kTh07GameManagerFrameCounterOffset = 0x95e8;
 inline constexpr std::uint32_t kTh07GameManagerFrameCounterGlobalAddress =
     kTh07GameManagerObjectAddress + kTh07GameManagerFrameCounterOffset;
 inline constexpr std::uint32_t kTh07ScreenEffectShakeFunctionAddress = 0x0044b0e0;
+inline constexpr std::uint32_t kTh07ScreenEffectRegisterChainFunctionAddress = 0x0044b310;
 inline constexpr std::int32_t kTh07ScreenShakeRequiredGameFrameCount = 2;
 inline constexpr std::uint32_t kTh07SetupDefaultCameraAddress = 0x00408180;
 inline constexpr std::uint32_t kTh07SetupStageCameraAddress = 0x004082b0;

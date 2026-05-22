@@ -9,6 +9,7 @@
 #include "ItemManager.hpp"
 #include "Player.hpp"
 #include "Rng.hpp"
+#include "Th07BulletTables.hpp"
 #include "ZunColor.hpp"
 #include "ZunMath.hpp"
 #include "utils.hpp"
@@ -43,30 +44,39 @@ struct BulletTypeInfo
     u32 bulletSpawnEffectDonutAnmScriptIdx;
 };
 
-#define ASB3(x) ANM_SCRIPT_BULLET3_##x
-#define ASB4(x) ANM_SCRIPT_BULLET4_##x
 DIFFABLE_STATIC_ARRAY_ASSIGN(BulletTypeInfo, 10, g_BulletTypeInfos) = {
-    {ASB3(PELLET), ASB3(SPAWN_PELLET_FAST), ASB3(SPAWN_PELLET_NORMAL), ASB3(SPAWN_PELLET_SLOW),
-     ASB3(SPAWN_DONUT_SMALL)},
-    {ASB3(RING_BALL), ASB3(SPAWN_BIG_BALL_FAST), ASB3(SPAWN_BIG_BALL_NORMAL), ASB3(SPAWN_BIG_BALL_SLOW),
-     ASB3(SPAWN_DONUT_MEDIUM)},
-    {ASB3(RICE), ASB3(SPAWN_BIG_BALL_FAST), ASB3(SPAWN_BIG_BALL_NORMAL), ASB3(SPAWN_BIG_BALL_SLOW),
-     ASB3(SPAWN_DONUT_MEDIUM)},
-    {ASB3(BALL), ASB3(SPAWN_BIG_BALL_FAST), ASB3(SPAWN_BIG_BALL_NORMAL), ASB3(SPAWN_BIG_BALL_SLOW),
-     ASB3(SPAWN_DONUT_MEDIUM)},
-    {ASB3(KUNAI), ASB3(SPAWN_BIG_BALL_FAST), ASB3(SPAWN_BIG_BALL_NORMAL), ASB3(SPAWN_BIG_BALL_SLOW),
-     ASB3(SPAWN_DONUT_MEDIUM)},
-    {ASB3(SHARD), ASB3(SPAWN_BIG_BALL_FAST), ASB3(SPAWN_BIG_BALL_NORMAL), ASB3(SPAWN_BIG_BALL_SLOW),
-     ASB3(SPAWN_DONUT_MEDIUM)},
-    {ASB3(BIG_BALL), ASB3(SPAWN_BIG_BALL_HUGE), ASB3(SPAWN_BIG_BALL_HUGE), ASB3(SPAWN_BIG_BALL_HUGE),
-     ASB3(SPAWN_DONUT_BIG)},
-    {ASB3(FIREBALL), ASB3(SPAWN_BIG_BALL_HUGE), ASB3(SPAWN_BIG_BALL_HUGE), ASB3(SPAWN_BIG_BALL_HUGE),
-     ASB3(SPAWN_DONUT_BIG)},
-    {ASB3(DAGGER), ASB3(SPAWN_BIG_BALL_HUGE), ASB3(SPAWN_BIG_BALL_HUGE), ASB3(SPAWN_BIG_BALL_HUGE),
-     ASB3(SPAWN_DONUT_BIG)},
-    {ASB4(BUBBLE), ASB4(SPAWN_BUBBLE_SLOW), ASB4(SPAWN_BUBBLE_SLOW), ASB4(SPAWN_BUBBLE_SLOW),
-     ASB4(SPAWN_BUBBLE_NORMAL)},
+    {kTh07EnemyBulletTemplateScripts[0].bulletScript, kTh07EnemyBulletTemplateScripts[0].spawnFastScript,
+     kTh07EnemyBulletTemplateScripts[0].spawnNormalScript, kTh07EnemyBulletTemplateScripts[0].spawnSlowScript,
+     kTh07EnemyBulletTemplateScripts[0].spawnDonutScript},
+    {kTh07EnemyBulletTemplateScripts[1].bulletScript, kTh07EnemyBulletTemplateScripts[1].spawnFastScript,
+     kTh07EnemyBulletTemplateScripts[1].spawnNormalScript, kTh07EnemyBulletTemplateScripts[1].spawnSlowScript,
+     kTh07EnemyBulletTemplateScripts[1].spawnDonutScript},
+    {kTh07EnemyBulletTemplateScripts[2].bulletScript, kTh07EnemyBulletTemplateScripts[2].spawnFastScript,
+     kTh07EnemyBulletTemplateScripts[2].spawnNormalScript, kTh07EnemyBulletTemplateScripts[2].spawnSlowScript,
+     kTh07EnemyBulletTemplateScripts[2].spawnDonutScript},
+    {kTh07EnemyBulletTemplateScripts[3].bulletScript, kTh07EnemyBulletTemplateScripts[3].spawnFastScript,
+     kTh07EnemyBulletTemplateScripts[3].spawnNormalScript, kTh07EnemyBulletTemplateScripts[3].spawnSlowScript,
+     kTh07EnemyBulletTemplateScripts[3].spawnDonutScript},
+    {kTh07EnemyBulletTemplateScripts[4].bulletScript, kTh07EnemyBulletTemplateScripts[4].spawnFastScript,
+     kTh07EnemyBulletTemplateScripts[4].spawnNormalScript, kTh07EnemyBulletTemplateScripts[4].spawnSlowScript,
+     kTh07EnemyBulletTemplateScripts[4].spawnDonutScript},
+    {kTh07EnemyBulletTemplateScripts[5].bulletScript, kTh07EnemyBulletTemplateScripts[5].spawnFastScript,
+     kTh07EnemyBulletTemplateScripts[5].spawnNormalScript, kTh07EnemyBulletTemplateScripts[5].spawnSlowScript,
+     kTh07EnemyBulletTemplateScripts[5].spawnDonutScript},
+    {kTh07EnemyBulletTemplateScripts[6].bulletScript, kTh07EnemyBulletTemplateScripts[6].spawnFastScript,
+     kTh07EnemyBulletTemplateScripts[6].spawnNormalScript, kTh07EnemyBulletTemplateScripts[6].spawnSlowScript,
+     kTh07EnemyBulletTemplateScripts[6].spawnDonutScript},
+    {kTh07EnemyBulletTemplateScripts[7].bulletScript, kTh07EnemyBulletTemplateScripts[7].spawnFastScript,
+     kTh07EnemyBulletTemplateScripts[7].spawnNormalScript, kTh07EnemyBulletTemplateScripts[7].spawnSlowScript,
+     kTh07EnemyBulletTemplateScripts[7].spawnDonutScript},
+    {kTh07EnemyBulletTemplateScripts[8].bulletScript, kTh07EnemyBulletTemplateScripts[8].spawnFastScript,
+     kTh07EnemyBulletTemplateScripts[8].spawnNormalScript, kTh07EnemyBulletTemplateScripts[8].spawnSlowScript,
+     kTh07EnemyBulletTemplateScripts[8].spawnDonutScript},
+    {kTh07EnemyBulletTemplateScripts[9].bulletScript, kTh07EnemyBulletTemplateScripts[9].spawnFastScript,
+     kTh07EnemyBulletTemplateScripts[9].spawnNormalScript, kTh07EnemyBulletTemplateScripts[9].spawnSlowScript,
+     kTh07EnemyBulletTemplateScripts[9].spawnDonutScript},
 };
+static_assert(kTh07EnemyBulletResolvedTemplateCount == 10);
 
 void BulletManager::InitializeToZero()
 {
@@ -1353,12 +1363,8 @@ ZunResult BulletManager::AddedCallback(BulletManager *mgr)
 
     if ((ZunBool)(g_Supervisor.curState != SUPERVISOR_STATE_GAMEMANAGER_REINIT))
     {
-        if (g_AnmManager->LoadAnm(ANM_FILE_BULLET3, "data/etama3.anm", ANM_OFFSET_BULLET3) != ZUN_SUCCESS)
-        {
-            return ZUN_ERROR;
-        }
-
-        if (g_AnmManager->LoadAnm(ANM_FILE_BULLET4, "data/etama4.anm", ANM_OFFSET_BULLET4) != ZUN_SUCCESS)
+        if (g_AnmManager->LoadAnm(kTh07EnemyBulletAnmManagerSlot, "data/etama.anm",
+                                  kTh07EnemyBulletAnmScriptOffset) != ZUN_SUCCESS)
         {
             return ZUN_ERROR;
         }
@@ -1366,6 +1372,7 @@ ZunResult BulletManager::AddedCallback(BulletManager *mgr)
 
     for (idx = 0; idx < 10; idx++)
     {
+        const Th07EnemyBulletTemplateScripts &templateEvidence = kTh07EnemyBulletTemplateScripts[idx];
         g_AnmManager->SetAndExecuteScriptIdx(&mgr->bulletTypeTemplates[idx].spriteBullet,
                                              g_BulletTypeInfos[idx].bulletAnmScriptIdx);
         g_AnmManager->SetAndExecuteScriptIdx(&mgr->bulletTypeTemplates[idx].spriteSpawnEffectFast,
@@ -1378,57 +1385,10 @@ ZunResult BulletManager::AddedCallback(BulletManager *mgr)
                                              g_BulletTypeInfos[idx].bulletSpawnEffectDonutAnmScriptIdx);
         mgr->bulletTypeTemplates[idx].spriteBullet.baseSpriteIndex =
             mgr->bulletTypeTemplates[idx].spriteBullet.activeSpriteIndex;
-        mgr->bulletTypeTemplates[idx].bulletHeight = mgr->bulletTypeTemplates[idx].spriteBullet.sprite->heightPx;
-
-        if (mgr->bulletTypeTemplates[idx].spriteBullet.sprite->heightPx <= 8.0f)
-        {
-            mgr->bulletTypeTemplates[idx].grazeSize.x = 4.0f;
-            mgr->bulletTypeTemplates[idx].grazeSize.y = 4.0f;
-        }
-        else if (mgr->bulletTypeTemplates[idx].spriteBullet.sprite->heightPx <= 16.0f)
-        {
-            switch (g_BulletTypeInfos[idx].bulletAnmScriptIdx)
-            {
-            case ANM_SCRIPT_BULLET3_RICE:
-                mgr->bulletTypeTemplates[idx].grazeSize.x = 4.0f;
-                mgr->bulletTypeTemplates[idx].grazeSize.y = 4.0f;
-                break;
-            case ANM_SCRIPT_BULLET3_KUNAI:
-                mgr->bulletTypeTemplates[idx].grazeSize.x = 5.0f;
-                mgr->bulletTypeTemplates[idx].grazeSize.y = 5.0f;
-                break;
-            case ANM_SCRIPT_BULLET3_SHARD:
-                mgr->bulletTypeTemplates[idx].grazeSize.x = 4.0f;
-                mgr->bulletTypeTemplates[idx].grazeSize.y = 4.0f;
-                break;
-            default:
-                mgr->bulletTypeTemplates[idx].grazeSize.x = 6.0f;
-                mgr->bulletTypeTemplates[idx].grazeSize.y = 6.0f;
-                break;
-            }
-        }
-        else if (mgr->bulletTypeTemplates[idx].spriteBullet.sprite->heightPx <= 32.0f)
-        {
-            switch (g_BulletTypeInfos[idx].bulletAnmScriptIdx)
-            {
-            case ANM_SCRIPT_BULLET3_FIREBALL:
-                mgr->bulletTypeTemplates[idx].grazeSize.x = 11.0f;
-                mgr->bulletTypeTemplates[idx].grazeSize.y = 11.0f;
-                break;
-            case ANM_SCRIPT_BULLET3_DAGGER:
-                mgr->bulletTypeTemplates[idx].grazeSize.x = 9.0f;
-                mgr->bulletTypeTemplates[idx].grazeSize.y = 9.0f;
-                break;
-            default:
-                mgr->bulletTypeTemplates[idx].grazeSize.x = 16.0f;
-                mgr->bulletTypeTemplates[idx].grazeSize.y = 16.0f;
-            }
-        }
-        else
-        {
-            mgr->bulletTypeTemplates[idx].grazeSize.x = 32.0f;
-            mgr->bulletTypeTemplates[idx].grazeSize.y = 32.0f;
-        }
+        mgr->bulletTypeTemplates[idx].bulletHeight = templateEvidence.spriteHeight;
+        mgr->bulletTypeTemplates[idx].unk_55c = templateEvidence.spriteOffsetCategory;
+        mgr->bulletTypeTemplates[idx].grazeSize.x = templateEvidence.grazeSize;
+        mgr->bulletTypeTemplates[idx].grazeSize.y = templateEvidence.grazeSize;
     }
 
     memset(&g_ItemManager, 0, sizeof(ItemManager));
@@ -1439,8 +1399,7 @@ ZunResult BulletManager::DeletedCallback(BulletManager *arg)
 {
     if ((i32)(g_Supervisor.curState != SUPERVISOR_STATE_GAMEMANAGER_REINIT))
     {
-        g_AnmManager->ReleaseAnm(ANM_FILE_BULLET3);
-        g_AnmManager->ReleaseAnm(ANM_FILE_BULLET4);
+        g_AnmManager->ReleaseAnm(kTh07EnemyBulletAnmManagerSlot);
     }
 
     return ZUN_SUCCESS;

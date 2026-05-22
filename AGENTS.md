@@ -4,172 +4,153 @@ Rules for AI agents and contributors working on this repository.
 
 ## Current Goal
 
-Reconstruct Touhou Youyoumu ~ Perfect Cherry Blossom / TH07 as a C++ source-level, playable, cross-platform project from the original TH07 binary, decompilation, and extracted data.
+Reconstruct Touhou Youyoumu ~ Perfect Cherry Blossom / TH07 as a source-level C++ project by converging every original TH07 runtime function to behavior-level parity, one comparable function at a time.
 
-Work should advance through an evidence-first, dependency-ordered restoration loop, not by repeatedly polishing one familiar module. Prefer slices that unlock many downstream functions, replace obsolete TH06 carryover, or convert transitional code into source-derived code.
+The current project phase is not the SDL3/Vulkan port. The current phase is function recovery and convergence. SDL3/Vulkan is a later portability phase that begins only after the live gameplay/runtime functions have TH07 behavior parity or an explicitly accepted portability-boundary exception.
 
-The source of truth is original TH07 behavior and data: binary behavior, data formats, fixed-frame timing, RNG, replay behavior, hitboxes, bullet patterns, scoring, stages, assets, scripts, and resource timing. The target is behavior parity, not binary parity.
+The finished reconstruction should operate like the GensokyoClub/th06 project: build directly from the repository, produce a directly launchable executable, load original TH07 resources from the user's local resource path, and play with TH07 behavior. That operational goal does not mean the modern build must be binary-identical to the original TH07 executable.
 
-Use the flat GensokyoClub/th06-style `src/` tree as the editable source workspace and as the decompilation/coding-style reference. TH06 may guide file shape, include style, naming style, and shared infrastructure only after the matching TH07 evidence is identified. TH06 must not be used to invent or approve TH07 gameplay behavior.
+Binary matching is best effort. Use objdiff wherever a current object can be made comparable, and keep improving the match when doing so does not harm source clarity or behavior. Do not make whole-project `97%` or `100%` binary identity a completion gate. The hard gate is TH07 behavior-level parity, backed by original evidence and tracked per function.
 
-The port target is SDL3 + Vulkan. Replace Win32, DirectX, platform, rendering, input, and audio layers only at the boundary where portability requires it. Deterministic gameplay and simulation code must remain faithful to original TH07 behavior.
+TH06 may guide file shape, include style, naming style, and known shared infrastructure only after the matching TH07 evidence is identified. TH06 must never approve TH07 gameplay, timing, scoring, resources, scripts, object layouts, RNG/timer behavior, or dispatch behavior.
 
-Do not guess. If evidence is missing or incomplete, keep the behavior pending or blocked, record the address/offset/script/data evidence already found, and leave the smallest practical placeholder instead of filling in a compatible approximation.
-
-A slice is only ready for handoff when the current implemented module builds or its build gap is documented, the strongest practical validation has run, and behavior is labeled with the repository status vocabulary below.
+Current uncommitted reconstruction work is intentional. Do not revert, clean, discard, or rewrite unrelated work unless the user explicitly asks.
 
 ## Authority Order
 
 When sources conflict, use this priority order:
 
 1. Current user instruction.
-2. Original TH07 corpus under `reference/original/`: `th07.exe`, `th07.dat`, `thbgm.dat`, manuals, config, and related original files.
-3. TH07 static reverse-engineering evidence under `reference/ghidra/`.
+2. Original TH07 corpus under `reference/original/`: `th07.exe`, `th07.dat`, `thbgm.dat`, config, manuals, and related original files.
+3. TH07 reverse-engineering evidence under `reference/ghidra/`, especially decompiler output, functions tables, xrefs, anchors, and PE-byte checks.
 4. Extracted original data under `reference/extracted/`, `reference/ecl/`, `reference/std/`, and `reference/msg/`.
-5. Current C++ source under `src/`.
-6. TH06 / GensokyoClub `th06`, for decompilation reference, project shape, coding style, naming style, and verified shared behavior only.
+5. Current source under `src/`, only for already-converged TH07 behavior or explicitly marked transition code.
+6. TH06 / GensokyoClub `th06`, for structure/style only after TH07 evidence is known.
 7. External documentation, for cross-validation only.
 
-`reference/` is local evidence. Do not commit original game files, extracted resources, Ghidra project data, or generated proprietary assets. Only `reference/README.md` and placeholder files may be tracked.
+`reference/` is local evidence. Do not commit original game files, extracted proprietary resources, full Ghidra projects, generated proprietary assets, secrets, credentials, caches, build directories, or throwaway debug outputs.
 
-## Fidelity Rules
+## Function Status
 
-Match original TH07 gameplay for:
+Track live runtime replacement in `config/runtime_replacement_manifest.csv`. This ledger is stricter than subsystem docs. A subsystem note such as `source-derived` does not mean its live functions are complete.
 
-- frame timing, RNG, coordinates, angles, speed, acceleration
-- input sampling, movement, collision, hitboxes, damage, invulnerability
-- enemy scripts, boss phases, spell behavior, drops, items, scoring
-- player movement, shots, bombs, death, power, lives, extends
-- Cherry, Cherry+, Supernatural Border, Border Bonus, and related item/scoring behavior
-- dialogue triggers, UI state, stage transitions, replay-relevant state, and sound timing
+Use these function-level states going forward:
 
-No gameplay modernization is approved by default. Do not substitute a compatible approximation when original behavior can be inspected. Debug overlays, including hitbox display, may exist only behind explicit development flags and must never change gameplay state.
+- `unmapped`: the original function or behavior surface is not mapped.
+- `mapped`: original address, owner fields, inputs/outputs, and side effects are identified, but current code is not comparable or wired.
+- `comparable`: original and current objects can be compared with objdiff for the stated function.
+- `converging`: current code is being changed toward the original and has a recorded objdiff/behavior baseline.
+- `behavior-matched`: behavior, side effects, data flow, timer/RNG use, and replay-relevant state match TH07 evidence for the stated scope.
+- `objdiff-close`: behavior is matched and objdiff is meaningfully close; use this only for functions where the object comparison supports it.
+- `objdiff-high`: behavior is matched and objdiff is very close; this is a stretch quality label, not a global requirement.
+- `binary-exact`: current comparable output is effectively identical for that function. Expect this only for small helpers.
+- `legacy-th06`: live behavior is still TH06 carryover.
+- `portable-boundary`: code intentionally differs from TH07's Win32/DirectX/DirectSound implementation only at an accepted backend boundary.
+- `blocked`: convergence cannot proceed safely until named evidence, ownership, lifetime, or validation is found.
 
-## Architecture
+Existing rows may still contain older labels such as `live-th07`, `function-mapped`, or `pending` while the ledger migrates. Do not add new rows with those older labels unless you are preserving a nearby row during a narrow edit.
 
-- `src/`: flat GensokyoClub/th06-style C++ source tree. TH06-derived code is replaced by TH07 evidence in place.
-- `src/pbg3/`: archive reader sources kept in the same subdirectory shape as GensokyoClub/th06.
-- `src/main.cpp` and `src/Th07App.cpp`: application entrypoint and SDL3/Vulkan shell.
-- `docs/`: reconstruction status, subsystem differences, and project notes.
-- `config/`: mapping tables and structured reverse-engineering notes.
-- `scripts/`: extraction, Ghidra export, import, and audit tooling.
-- `tests/`: C++ validation and evidence checks.
-- `resources/`: redistributable placeholders and instructions only.
-- `reference/`: ignored local original/evidence material.
+## Behavior Parity
 
-Do not reintroduce `src/game/`, `src/app/`, or `src/reconstruction/original-engine/` as live source roots unless the user explicitly changes the structure goal again. Historical provenance notes may remain as normal files under the flat tree.
+Behavior-level parity means the current implementation matches the original TH07 function for:
 
-Keep deterministic gameplay logic independent from SDL, Vulkan, miniaudio, filesystem dialogs, OS timing, and window APIs. Platform backends may call into gameplay logic, but gameplay logic must not call into platform backends.
+- function boundary, dispatch path, caller-visible return values, and error/fallback behavior
+- object/global field reads and writes, including aliasing and clear/copy spans
+- allocation, free, ownership, list/slot lifetime, and callback registration
+- frame timing, subframe timer behavior, force-step flags, and scheduler effects
+- RNG calls, seed transitions, angle normalization, and float/int conversion semantics
+- input sampling, movement priority, bounds, collision, graze, item collection, damage, death, and invulnerability
+- SHT, ANM, STD, MSG, ECL, effect, item, bullet, laser, boss, score, Cherry/Border, replay, and result side effects
+- resource load/free order, sound timing, dialogue state, GUI state, and stage transitions
 
-## Restoration Strategy
+Tests and objdiff are evidence. They are not a substitute for identifying the original function's full behavior surface. Passing tests does not by itself make a function `behavior-matched`.
 
-Use a dependency-ordered loop for reconstruction work:
+## Objdiff Policy
 
-1. Data formats, constants, tables, object layouts, and pure helpers.
-2. Manager ownership, live object layout, and dispatch contracts.
-3. Interpreters, script VMs, callback runtimes, and state machines.
-4. Gameplay systems: resource/archive, ANM, Stage, Effect, Player, Bomb, SHT, Bullet/Laser, ECL, Enemy/Boss, Item, Cherry/Border, GameManager.
-5. GUI, ResultScreen, Replay, Input, Audio, and platform/render parity boundaries.
+For every function being replaced:
 
-At the start of a substantial iteration, inspect the current worktree, existing manifests/audits, and current source coverage. Choose the highest-value safe unblocked slice by dependency order. Do not keep working on one module after it is evidence-blocked while another unblocked dependency slice exists.
+1. Identify the original TH07 address/name and size from `reference/ghidra/functions.tsv` or stronger evidence.
+2. Produce or reuse an original object slice from `reference/original/th07.exe`.
+3. Compile a current comparable object whenever practical. Diff-only compatibility shims are allowed when they do not become normal runtime dependencies.
+4. Rename current symbols to original `FUN_...` names for comparison when needed.
+5. Record match percent, compared object path, blockers, and the strongest behavior validation in the manifest or nearby tracker.
+6. Improve objdiff as best effort after behavior is correct. Prefer behavior and source mapping over register-allocation games.
 
-Prefer generated or structured tracking over prose-only planning. Use existing trackers and audits first, especially `docs/TH07_RECONSTRUCTION_STATUS.md`, `docs/TH07_DIFF_FROM_TH06.md`, `docs/TH07_CPP_RECONSTRUCTION.md`, `config/subsystems.csv`, and `scripts/audit-th07-*.mjs`. Do not create scattered new Markdown planning documents. If tracking is missing, add one compact structured manifest under `config/` or generate it from `scripts/`.
+Low objdiff does not automatically fail a function if the remaining difference is explained by compiler, ABI, backend, or accepted portability-boundary differences. High objdiff does not automatically prove behavior if important side effects are untested or unmapped.
 
-Use these status labels when tracking restoration state:
+## Source Tree Rules
 
-- `exact`: verified against original TH07 behavior/data for the stated scope.
-- `source-derived`: directly modeled from TH07 binary, decompiler, xrefs, or extracted data, but not yet exhaustive runtime parity.
-- `transitional`: live code still mixes TH06-derived shape with TH07 evidence slices.
-- `metadata-only`: constants, tables, owner offsets, or helper contracts are recorded, but runtime wiring is intentionally pending.
-- `pending`: not audited or not implemented yet.
-- `blocked`: evidence, ownership, lifetime, dispatch, or validation is missing and must be resolved before safe wiring.
-- `obsolete-th06-carryover`: copied TH06 behavior or shape that is known not to be authoritative for TH07 and should be replaced.
+Keep `src/` flat, matching the TH06 project style. Do not introduce `src/game/`, `src/app/`, `src/reconstruction/`, or other live source roots unless the user explicitly changes the structure goal.
 
-## Goal Alignment Gate
+Clean `src/` by ownership, not by cosmetic preference:
 
-Before starting a new long-running or unattended goal, review the active goal against this file and the current project status. Confirm that the goal:
+- Runtime behavior belongs in the module that owns the original function.
+- Temporary evidence files such as `Th07*Tables`, `*Layout`, and `*Contract` are allowed only while they help convergence. Merge them into the owning module once the live function is behavior-matched.
+- Independent binary-format readers may remain separate when the format boundary is real: ANM, STD, MSG, ECL, SHT, archive, and similar parsers.
+- `src/compat/` is for diff-only compilation and short-lived convergence shims. Do not let it become the normal portability layer.
+- `src/pbg3/` is historical/archive-reader lineage. Prefer TH07 archive evidence for live resource loading.
+- Do not do broad file moves together with behavior changes. Move/merge mechanically first, validate, then change behavior.
 
-- preserves TH07 evidence authority and the flat `src/` layout
-- treats SDL3/Vulkan only as backend boundaries
-- uses dependency-ordered reconstruction instead of single-module polishing
-- keeps tracking in existing docs/audits/config manifests
-- does not require guessing, premature runtime wiring, or committing ignored reference data
-- can run unattended without waiting for interactive approvals, escalated filesystem permissions, or network publishing credentials
+When deleting or merging files, first prove they are unused or fully absorbed: includes, CMake, tests, scripts, audits, docs, and manifest rows must move together.
 
-If the active goal and this file conflict, update `AGENTS.md` first, validate that change, and only then begin formal reconstruction work.
+## Port Boundary
 
-## Unattended Mode
+SDL3/Vulkan, miniaudio, host filesystem dialogs, OS timers, and window/event handling are port work. During the function-convergence phase:
 
-Unattended reconstruction work must not depend on interactive authorization. During unattended runs:
+- Keep deterministic gameplay independent from SDL, Vulkan, audio backend lifetime, window events, host timing, and platform file dialogs.
+- Preserve only the minimal application shell needed for build/resource/headless smoke checks.
+- Do not expand renderer/input/audio features as a substitute for TH07 function convergence.
+- Mark unavoidable backend substitutions as `portable-boundary` and describe the original function they replace.
 
-- Do not run `git add`, `git commit`, `git push`, PR creation/update, branch rewrites, rebases, destructive git commands, or network publishing commands unless the user has explicitly pre-approved the exact required command class for the session and the command works non-interactively.
-- Do not start commands that are expected to require escalated filesystem permissions, credential prompts, browser/GUI authorization, or network access approvals.
-- Prefer normal workspace edits, local source inspection, local tests, local audits, and tracker/doc updates that can run without approval.
-- Leave validated work as an uncommitted checkpoint when committing or publishing would require approval.
-- Record checkpoint state in existing trackers/docs or the final handoff: changed files, evidence used, validations run, known gaps, blockers, and the next dependency slice.
-- Stop before any required escalation instead of waiting for authorization.
+## Work Loop
 
-When the user returns, they can review, commit, push, or approve publishing. If the user explicitly asks for a non-unattended publish/checkpoint turn, normal repository commit and PR workflows may be used.
+Use this loop for each slice:
 
-## Work Process
+1. Pick the next unblocked function by dependency order.
+2. Read TH07 evidence before editing current code.
+3. Add or update the manifest row with address, current surface, status, evidence, blocker, next action, and validation.
+4. Make the current function comparable with objdiff if practical.
+5. Replace behavior from TH07 evidence, preserving call order and side effects.
+6. Run the strongest practical validation.
+7. Update manifest/docs only with durable facts: behavior status, objdiff baseline, known gaps, and next function.
 
-For flat `src/` structure and style maintenance:
+Dependency order:
 
-- Treat GensokyoClub/th06 as the layout and coding-style reference.
-- Move or rename files mechanically when structure work is required; avoid semantic behavior changes in the same edit.
-- Update includes, CMake, scripts, docs, and tests together with any file moves.
-- Keep old nested source roots deleted; do not revive them as live source roots.
-- Preserve TH07-specific names and evidence-backed constants even when the surrounding style comes from TH06.
+1. File/archive/resource loading, binary parsers, constants, object layouts, and pure helpers.
+2. Manager ownership, allocation/free lifetime, dispatch contracts, and live object layout.
+3. Script VMs and interpreters: ANM, STD, MSG, ECL, SHT callbacks.
+4. Gameplay systems: Player, Bomb, Bullet/Laser, Enemy/Boss, Item, Cherry/Border, Effect, Stage, GameManager, ResultScreen.
+5. Replay, input sampling, score-file, audio timing, GUI completion, and accepted backend boundaries.
 
-Before editing behavior:
-
-- Inspect the relevant TH07 executable/disassembly/decompiler evidence or extracted original script/data.
-- Compare against the matching TH06/GensokyoClub subsystem only after TH07 evidence is identified.
-- Mark broad TH07-vs-TH06 subsystem differences as Same, Changed, New, or Pending in `docs/TH07_DIFF_FROM_TH06.md`.
-- Track implementation status with the restoration labels from this file in the relevant existing tracker, compact manifest, tests, audits, or commit message.
-- Prefer parsed original data over hand-written recreations.
-- Identify what evidence will prove the current module exact, source-derived, or still placeholder before declaring it done.
-- When evidence is incomplete, record the mapped addresses/offsets and leave runtime wiring pending instead of guessing a compatible behavior.
-- If a slice fails twice for the same evidence or validation reason, mark it blocked with the missing proof and move to the next safe unblocked dependency slice.
-
-While editing:
-
-- Keep original resources and generated evidence under `reference/`.
-- Keep source changes in tracked project files outside `reference/`.
-- Do not rerun or overwrite the flat `src/` TH06 baseline import unless explicitly running `scripts/import-th06-baseline.mjs` with intent.
-- Avoid unrelated refactors; every behavior change should point to evidence.
-- Preserve GensokyoClub/th06 file shape and local style unless TH07 evidence or portability requires a different shape.
-- Keep source-derived metadata, tests, and docs close together so the next agent can recover the evidence chain quickly.
-- Update only the relevant tests, audits, manifests, and docs for the active slice. Do not polish unrelated modules during an unattended dependency-ordered run.
-
-After editing:
-
-- Run the strongest practical validation.
-- Update `docs/TH07_RECONSTRUCTION_STATUS.md` when synchronization state changes.
-- State whether behavior is exact, source-derived, or still a placeholder.
-- Do not mark a module complete just because tests pass; tests are only evidence for the cases they actually cover.
-- Before stopping for a handoff, leave a concise checkpoint with modified scope, validation run, known gaps, and the next evidence-backed step.
-- Do not commit or discard work unless the user explicitly asks. In unattended restoration loops, do not commit or push by default; leave validated work as an uncommitted checkpoint unless the user pre-approved the needed git operations before the run.
-- After each validated checkpoint or marked blocker, update the relevant existing tracker or compact manifest with restored items, evidence used, validation status, transitional items, blockers, and the next best dependency slice.
-- Limit broad inventory/audit passes to one per unattended run unless another pass directly unlocks the active implementation slice.
+If the same slice is blocked twice for the same missing proof, mark it `blocked` with the missing evidence and move to the next unblocked function.
 
 ## Validation
 
 Use the strongest practical subset available:
 
-- `cmake --preset linux-debug`
-- `cmake --build --preset linux-debug`
-- `ctest --preset linux-debug`
+- `git diff --check`
 - `npm run check`
 - `npm run audit-cpp`
 - `npm run audit-resources`
 - `npm run audit-diff`
+- `node scripts/audit-ecl-opcodes.mjs` when ECL tables or interpreter surfaces change
+- `npm run objdiff-player` for Player-related comparable-object work
+- future module objdiff scripts when added
 - `npm run ghidra-anchors` when replacing behavior from static decompilation anchors
-- `npm run ghidra-decomp` when refreshing the local full decompiler corpus
+- `cmake --preset linux-debug`
+- `cmake --build --preset linux-debug`
+- `ctest --preset linux-debug`
+- `build/linux-debug/th07-vulkan --check-resources` when resource/archive paths change
+- `build/linux-debug/th07-vulkan --headless-smoke` when startup/resource behavior changes
+- `npm run ghidra-decomp` only when refreshing the local full decompiler corpus is intentional
 
-For structure-only work, at minimum run the checks that prove the moved paths, includes, build metadata, and audits agree. For documentation-only changes, minimal validation is acceptable.
+The playable bar is higher than the audit bar. The repository is not done until the normal build produces a launchable executable that loads original TH07 resources and runs playable TH07 game flow with TH07 behavior replacing TH06 carryover.
 
-## Repo Hygiene
+## Git And Hygiene
+
+Do not run `git add`, `git commit`, `git push`, PR creation/update, branch rewrites, rebases, or destructive git commands unless the user explicitly asks.
+
+Do not revert or discard existing work you did not make. If unrelated files are dirty, leave them alone. If a dirty file affects your task, understand and work with the existing changes.
 
 Never commit or ship:
 
@@ -178,4 +159,4 @@ Never commit or ship:
 - caches, generated logs, screenshots, build directories, or test outputs
 - throwaway debug scripts
 
-New tests, audit tools, extraction tools, CMake files, reconstruction notes, and source scaffolding may be tracked when intentional.
+When stopping, leave a concise checkpoint: changed scope, functions/status rows touched, TH07 evidence used, objdiff result if any, validations run, known blockers, and the next function-level step.

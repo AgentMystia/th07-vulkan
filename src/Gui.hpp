@@ -26,6 +26,7 @@ enum MsgOps
     MSG_OPCODE_STAGEEND,
     MSG_OPCODE_MUSICFADEOUT,
     MSG_OPCODE_WAITSKIPPABLE,
+    MSG_OPCODE_SCREENFADE,
 };
 
 struct MsgRawInstrArgPortraitAnmScript
@@ -44,10 +45,14 @@ struct MsgRawInstrArgAnmInterrupt
     i16 unk1;
     u8 unk2;
 };
+struct MsgRawInstrArgDialogueSkippable
+{
+    u8 isSkippable;
+};
 union MsgRawInstrArgs {
     MsgRawInstrArgPortraitAnmScript portraitAnmScript;
     MsgRawInstrArgText text;
-    i32 dialogueSkippable;
+    MsgRawInstrArgDialogueSkippable dialogueSkippable;
     i32 wait;
     MsgRawInstrArgAnmInterrupt anmInterrupt;
     i32 music;

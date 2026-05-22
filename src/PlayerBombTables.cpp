@@ -85,6 +85,126 @@ const std::array<PlayerStageColorWriteProducer, 3> kPlayerStageColorWriteProduce
      "FUN_004420b0"},
 }};
 
+const std::array<PlayerModeEffectLifecycleContract, kPlayerModeEffectLifecycleContractCount>
+    kPlayerModeEffectLifecycleContracts = {{
+        {PlayerModeEffectLifecycleKind::ReplaceTransitionEffect,
+         PlayerModeEffectPointerSlot::TransitionEffect,
+         kPlayerModeEnterMode4FunctionAddress,
+         kPlayerModeTransitionEffectActivePointerOffset,
+         0x00441a5e,
+         kPlayerModeEffectLifecycleNoInstruction,
+         0x00441aa4,
+         0x00441b74,
+         kPlayerModeTransitionEffectId,
+         kPlayerModeTransitionEffectSpawnSlotArgument,
+         kPlayerModeTransitionEffectSpawnFlagArgument,
+         "FUN_00441960: kills previous transition active flag, spawns 0x1c, stores +0xb7e6c"},
+        {PlayerModeEffectLifecycleKind::ClearCommonEffect,
+         PlayerModeEffectPointerSlot::CommonEffect,
+         kPlayerModeEnterMode4FunctionAddress,
+         kPlayerBombCommonEffectActivePointerOffset,
+         0x00441a7a,
+         0x00441a84,
+         kPlayerModeEffectLifecycleNoInstruction,
+         kPlayerModeEffectLifecycleNoInstruction,
+         kPlayerModeEffectLifecycleNoEffectId,
+         kPlayerModeEffectLifecycleNoEffectId,
+         kPlayerModeEffectLifecycleNoEffectId,
+         "FUN_00441960: kills common effect active flag and clears +0xb7e68"},
+        {PlayerModeEffectLifecycleKind::ReplaceTransitionEffect,
+         PlayerModeEffectPointerSlot::TransitionEffect,
+         kPlayerModeEnterMode3FunctionAddress,
+         kPlayerModeTransitionEffectActivePointerOffset,
+         0x00441bee,
+         0x00441bf8,
+         0x00441c19,
+         0x00441d35,
+         kPlayerModeTransitionEffectId,
+         kPlayerModeTransitionEffectSpawnSlotArgument,
+         kPlayerModeTransitionEffectSpawnFlagArgument,
+         "FUN_00441bd0: clears transition pointer, spawns 0x1c, stores +0xb7e6c"},
+        {PlayerModeEffectLifecycleKind::ClearTransitionEffect,
+         PlayerModeEffectPointerSlot::TransitionEffect,
+         kPlayerModeCleanupFunctionAddress,
+         kPlayerModeTransitionEffectActivePointerOffset,
+         0x004417e1,
+         0x004417eb,
+         kPlayerModeEffectLifecycleNoInstruction,
+         kPlayerModeEffectLifecycleNoInstruction,
+         kPlayerModeEffectLifecycleNoEffectId,
+         kPlayerModeEffectLifecycleNoEffectId,
+         kPlayerModeEffectLifecycleNoEffectId,
+         "FUN_00441670: kills transition active flag and clears +0xb7e6c"},
+    }};
+
+const std::array<PlayerModeRuntimeBranchContract, kPlayerModeRuntimeBranchContractCount>
+    kPlayerModeRuntimeBranchContracts = {{
+        {PlayerModeRuntimeBranchKind::UpdateMode3,
+         kPlayerModeUpdateFunctionAddress,
+         kPlayerModeState3,
+         0x00441370,
+         kPlayerBombCommonEffectXOffset,
+         0x004413b7,
+         kTh07TimerDecrementFunctionAddress,
+         0x004413c8,
+         kPlayerBombCommonEffectActivePointerOffset,
+         0x0044137c,
+         0x0044145c,
+         0x0044146b,
+         0x004413fa,
+         kPlayerModeRuntimeNoInstruction,
+         kPlayerModeRuntimeNoInstruction,
+         "FUN_00441330 mode 3: follows common effect, decrements +0x16a00 timer, expires to idle"},
+        {PlayerModeRuntimeBranchKind::UpdateMode4,
+         kPlayerModeUpdateFunctionAddress,
+         kPlayerModeState4,
+         0x00441484,
+         kPlayerBombCommonEffectXOffset,
+         0x0044151f,
+         kTh07TimerDecrementFunctionAddress,
+         0x00441530,
+         kPlayerModeTransitionEffectActivePointerOffset,
+         0x00441490,
+         0x00441574,
+         0x00441583,
+         0x00441546,
+         kPlayerModeCleanupFunctionAddress,
+         kPlayerStageColorWriteMode4UpdateCallAddress,
+         "FUN_00441330 mode 4: follows transition effect, updates score gauge, expires through cleanup"},
+        {PlayerModeRuntimeBranchKind::UpdateDefault,
+         kPlayerModeUpdateFunctionAddress,
+         kPlayerModeRuntimeDefaultBranchState,
+         0x00441636,
+         kPlayerBombCommonEffectXOffset,
+         0x00441660,
+         kTh07TickTimerFunctionAddress,
+         kPlayerModeRuntimeNoInstruction,
+         kPlayerModeRuntimeNoOwnerOffset,
+         kPlayerModeRuntimeNoInstruction,
+         kPlayerModeRuntimeNoInstruction,
+         kPlayerModeRuntimeNoInstruction,
+         0x0044164b,
+         kPlayerModeRuntimeNoInstruction,
+         kPlayerModeRuntimeNoInstruction,
+         "FUN_00441330 default: mirrors +0x16a08 into timer previous then ticks +0x16a08/+0x16a04"},
+        {PlayerModeRuntimeBranchKind::DrawMode4,
+         kPlayerModeDrawFunctionAddress,
+         kPlayerModeState4,
+         0x0044223d,
+         kPlayerModeRuntimeNoOwnerOffset,
+         kPlayerModeRuntimeNoInstruction,
+         kPlayerModeRuntimeNoInstruction,
+         0x00442252,
+         kPlayerModeRuntimeNoOwnerOffset,
+         kPlayerModeRuntimeNoInstruction,
+         0x00442280,
+         0x0044228f,
+         kPlayerModeRuntimeNoInstruction,
+         kPlayerModeRuntimeNoInstruction,
+         kPlayerStageColorWriteMode4DrawCallAddress,
+         "FUN_004420b0 draw mode 4: duration-gated blink color and stage-color producer"},
+    }};
+
 float PlayerBombRoutineTarget::scoreDrainFactor() const
 {
     return std::bit_cast<float>(scoreDrainFactorBits);
@@ -132,6 +252,31 @@ const PlayerStageColorWriteProducer *FindPlayerStageColorWriteProducer(PlayerSta
     for (const PlayerStageColorWriteProducer &producer : kPlayerStageColorWriteProducers) {
         if (producer.kind == kind) {
             return &producer;
+        }
+    }
+    return nullptr;
+}
+
+const PlayerModeEffectLifecycleContract *FindPlayerModeEffectLifecycleContract(
+    PlayerModeEffectLifecycleKind kind, std::uint32_t functionAddress,
+    PlayerModeEffectPointerSlot pointerSlot)
+{
+    for (const PlayerModeEffectLifecycleContract &contract : kPlayerModeEffectLifecycleContracts) {
+        if (contract.kind == kind &&
+            contract.functionAddress == functionAddress &&
+            contract.pointerSlot == pointerSlot) {
+            return &contract;
+        }
+    }
+    return nullptr;
+}
+
+const PlayerModeRuntimeBranchContract *FindPlayerModeRuntimeBranchContract(
+    PlayerModeRuntimeBranchKind kind)
+{
+    for (const PlayerModeRuntimeBranchContract &contract : kPlayerModeRuntimeBranchContracts) {
+        if (contract.kind == kind) {
+            return &contract;
         }
     }
     return nullptr;

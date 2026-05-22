@@ -155,6 +155,10 @@ ScreenEffect *ScreenEffect::RegisterChain(i32 effect, u32 ticks, u32 effectParam
     case SCREEN_EFFECT_FADE_OUT:
         calcChainElem = g_Chain.CreateElem((ChainCallback)ScreenEffect::CalcFadeOut);
         drawChainElem = g_Chain.CreateElem((ChainCallback)ScreenEffect::DrawFadeOut);
+        break;
+    case SCREEN_EFFECT_FULLSCREEN_FADE_OUT:
+        calcChainElem = g_Chain.CreateElem((ChainCallback)ScreenEffect::CalcFadeOut);
+        drawChainElem = g_Chain.CreateElem((ChainCallback)ScreenEffect::DrawFadeIn);
     }
 
     calcChainElem->addedCallback = (ChainAddedCallback)ScreenEffect::AddedCallback;

@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "FileSystem.hpp"
+#include "Th07FileSystemTables.hpp"
 #include "pbg3/Pbg3Archive.hpp"
 #include "utils.hpp"
 
@@ -22,24 +23,7 @@ u8 *FileSystem::OpenPath(char *filepath, int isExternalResource)
     entryIdx = -1;
     if (isExternalResource == 0)
     {
-        entryname = strrchr(filepath, '\\');
-        if (entryname == (char *)0x0)
-        {
-            entryname = filepath;
-        }
-        else
-        {
-            entryname = entryname + 1;
-        }
-        entryname = strrchr(entryname, '/');
-        if (entryname == (char *)0x0)
-        {
-            entryname = filepath;
-        }
-        else
-        {
-            entryname = entryname + 1;
-        }
+        entryname = const_cast<char *>(ComputeTh07ArchiveLookupName(filepath));
         if (g_Pbg3Archives != NULL)
         {
             for (pbg3Idx = 0; pbg3Idx < 0x10; pbg3Idx += 1)
@@ -56,22 +40,23 @@ u8 *FileSystem::OpenPath(char *filepath, int isExternalResource)
         }
         if (entryIdx < 0)
         {
+            utils::DebugPrint2("error : %s is not found in arcfile.\r\n", entryname);
             return NULL;
         }
     }
     if (entryIdx >= 0)
     {
-        utils::DebugPrint2("%s Decode ... \n", entryname);
+        utils::DebugPrint2("%s Decode ... \r\n", entryname);
         data = g_Pbg3Archives[pbg3Idx]->ReadDecompressEntry(entryIdx, entryname);
         g_LastFileSize = g_Pbg3Archives[pbg3Idx]->GetEntrySize(entryIdx);
     }
     else
     {
-        utils::DebugPrint2("%s Load ... \n", filepath);
+        utils::DebugPrint2("%s Load ... \r\n", filepath);
         file = fopen(filepath, "rb");
         if (file == NULL)
         {
-            utils::DebugPrint2("error : %s is not found.\n", filepath);
+            utils::DebugPrint2("error : %s is not found.\r\n", filepath);
             return NULL;
         }
         else
